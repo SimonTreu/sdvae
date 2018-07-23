@@ -1,5 +1,7 @@
 from torch.utils.data import Dataset
 import os.path
+import torch
+import random
 
 TORCH_EXTENSION = [
     '.pt'
@@ -9,18 +11,34 @@ TORCH_EXTENSION = [
 # Dataset implementation
 class ClimateDataset(Dataset):
     def __init__(self, opt):
-        self.opt = opt
         self.root = opt.dataroot
         self.dir_samples = os.path.join(opt.dataroot, opt.phase)
         self.sample_paths = sorted(get_sample_files(self.dir_samples))
-        self.scale_factor = opt.scale_factor
+        self.fine_size = opt.fine_size
         # self.norm_parameters = opt.mean_std Todo implement getting the norm parameters while reading the arguments
 
     def __len__(self):
         return len(self.sample_paths)
 
     def __getitem__(self, item):
-        pass
+        sample_path = self.sample_paths[item]
+        sample = torch.load(sample_path)
+
+        # random crop
+        w = sample.shape[-2]
+        h = sample.shape[-1]
+        w_offset = random.randint(0, max(0, w - self.fine_size-1))
+        h_offset = random.randint(0, max(0, h - self.fine_size-1))
+
+        input_sample = sample[:, h_offset:h_offset+self.fine_size, w_offset:w_offset+self.fine_size]
+        # get precipitation
+        input_sample = input_sample[0]
+
+        # TODO normalization
+
+        # TODO get upscaled value for this 8x8 cell
+
+        return {'input_sample': input_sample, 'input_path': sample_path}
 
 
 # Helper Methods

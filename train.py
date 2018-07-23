@@ -6,7 +6,7 @@ class Arg:
     def __init__(self):
         self.dataroot = "data/wind"
         self.phase = "train"
-        self.scale_factor = 8
+        self.fine_size = 8
 
 
 args = Arg()
