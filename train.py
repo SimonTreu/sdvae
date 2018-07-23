@@ -1,4 +1,4 @@
-import torch
+from datasets.climate_dataset import ClimateDataset
 
 
 class Arg:
@@ -8,4 +8,4 @@ class Arg:
 
 args = Arg()
 
-climate_data = ClimateDataset()
+climate_data = ClimateDataset(opt=args)
