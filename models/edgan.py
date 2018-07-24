@@ -7,8 +7,8 @@ class Edgan(nn.Module):
         super(Edgan, self).__init__()
         # variables
         self.nz = opt.nz
-        self.input_size = self.fine_size ** 2
-        hidden_layer_size = self.fine_size//2 ** 2
+        self.input_size = opt.fine_size ** 2
+        hidden_layer_size = opt.fine_size//2 ** 2
 
         # first layer (shared by mu and log_var):
         fc_layer_1 = nn.Linear(self.input_size, hidden_layer_size)
