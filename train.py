@@ -47,7 +47,7 @@ for epoch in range(args.n_epochs):
         cell_area = data['cell_area'].to(device)
 
         optimizer.zero_grad()
-        recon_x, mu, log_var = edgan_model(input_sample)
+        recon_x, mu, log_var = edgan_model(input_sample, average_value)
         bce, kld, cycle_loss, loss = edgan_model.loss_function(recon_x, input_sample, mu, log_var,
                                                                average_value, cell_area)
         loss.backward()
@@ -62,6 +62,7 @@ for epoch in range(args.n_epochs):
                     kld.item() / len(input_sample),
                     cycle_loss.item()/ len(input_sample),
                     loss.item() / len(input_sample)))
+            # todo make logging cluster ready
         if batch_idx % args.plot_interval == 0:
             vmin = 0
             vmax = 1e-3
@@ -69,6 +70,7 @@ for epoch in range(args.n_epochs):
             plt.show()
             plt.imshow(recon_x[0].view(8, 8).detach().numpy(), vmin=vmin, vmax=vmax)
             plt.show()
+            # todo make plotting cluster ready
 
     print('====> Epoch: {} Average loss: {:.4f}'.format(
           epoch, train_loss / len(climate_data_loader.dataset)))

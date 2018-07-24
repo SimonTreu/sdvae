@@ -22,20 +22,19 @@ class Edgan(nn.Module):
         self.mu = nn.Sequential(fc_layer_1, relu_1, mu)
         self.log_var = nn.Sequential(fc_layer_1, relu_1, log_var)
 
-        # todo add in the coarse scale pr value as input for the decoder
         # decoder
-        self.decode = nn.Sequential(nn.Linear(self.nz, hidden_layer_size),
+        self.decode = nn.Sequential(nn.Linear(self.nz+1, hidden_layer_size),
                                     nn.ReLU(),
                                     nn.Linear(hidden_layer_size, self.input_size),
                                     nn.ReLU()
                                     )
 
-    def forward(self, x):
+    def forward(self, x, average_value):
         x = x.view(-1, self.input_size)
         mu = self.mu(x)
         log_var = self.log_var(x)
         z = self.reparameterize(mu, log_var)
-        return self.decode(z), mu, log_var
+        return self.decode(torch.cat((z,average_value),1)), mu, log_var
 
     def reparameterize(self, mu, log_var):
         if self.training:
@@ -48,7 +47,6 @@ class Edgan(nn.Module):
     # todo read if that can be defined somewhere else
     # Reconstruction + KL divergence losses summed over all elements and batch
     def loss_function(self, recon_x, x, mu, log_var, average_value, cell_area):
-        # todo add cycle cost
         BCE = nn.functional.mse_loss(recon_x, x.view(-1, self.input_size), size_average=False)
 
         # see Appendix B from VAE paper:
