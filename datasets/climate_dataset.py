@@ -38,9 +38,10 @@ class ClimateDataset(Dataset):
 
         # TODO normalization
 
-        average_value = get_average(input_sample, cell_area=cell_area)
+        average_value = get_average(input_sample.contiguous().view(1,-1), cell_area=cell_area.contiguous().view(1,-1))
 
-        return {'input_sample': input_sample, 'input_path': sample_path, 'average_value': average_value}
+        return {'input_sample': input_sample, 'input_path': sample_path, 'average_value': average_value,
+                'cell_area': cell_area}
 
 
 # Helper Methods

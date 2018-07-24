@@ -20,6 +20,7 @@ class Arg:
         self.n_epochs = 10
         self.log_interval = 10
         self.plot_interval = 250
+        self.lambda_cycle_l1 = 10
 
 
 args = Arg()
@@ -41,26 +42,32 @@ for epoch in range(args.n_epochs):
     train_loss = 0
     edgan_model.train()
     for batch_idx, data in enumerate(climate_data_loader, 0):
-        data = data['input_sample'].to(device)
+        input_sample = data['input_sample'].to(device)
+        average_value = data['average_value'].to(device)
+        cell_area = data['cell_area'].to(device)
+
         optimizer.zero_grad()
-        recon_x, mu, log_var = edgan_model(data)
-        bce, kld, loss = edgan_model.loss_function(recon_x, data, mu, log_var)
+        recon_x, mu, log_var = edgan_model(input_sample)
+        bce, kld, cycle_loss, loss = edgan_model.loss_function(recon_x, input_sample, mu, log_var,
+                                                               average_value, cell_area)
         loss.backward()
         train_loss += loss.item()
         optimizer.step()
         if batch_idx % args.log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tBCE Loss: {:.3f}\tKL Loss: {:.3f}\tLoss: {:.3f}'.format(
-                epoch, batch_idx * len(data), len(climate_data_loader.dataset),
-                100. * batch_idx / len(climate_data_loader),
-                bce.item() / len(data),
-                kld.item() / len(data),
-                loss.item() / len(data)))
+            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tBCE Loss: {:.5f}\tKL Loss: {:.5f}\tcycle Loss {:.5f}'
+                  '\tLoss: {:.5f}'.format(
+                    epoch, batch_idx * len(input_sample), len(climate_data_loader.dataset),
+                    100. * batch_idx / len(climate_data_loader),
+                    bce.item() / len(input_sample),
+                    kld.item() / len(input_sample),
+                    cycle_loss.item(),
+                    loss.item() / len(input_sample)))
         if batch_idx % args.plot_interval == 0:
-            vmin=0
-            vmax=1e-3
-            plt.imshow(data[0].view(8, 8).detach().numpy(),vmin=vmin, vmax=vmax)
+            vmin = 0
+            vmax = 1e-3
+            plt.imshow(input_sample[0].view(8, 8).detach().numpy(), vmin=vmin, vmax=vmax)
             plt.show()
-            plt.imshow(recon_x[0].view(8, 8).detach().numpy(),vmin=vmin, vmax=vmax)
+            plt.imshow(recon_x[0].view(8, 8).detach().numpy(), vmin=vmin, vmax=vmax)
             plt.show()
 
     print('====> Epoch: {} Average loss: {:.4f}'.format(

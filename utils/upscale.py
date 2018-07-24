@@ -7,6 +7,5 @@ def get_average(input_sample, cell_area):
                          "cell_area.shape = {} are"
                          "not equal".format(input_sample.shape,
                                             cell_area.shape))
-    if len(input_sample.shape) != 2:
-        raise ValueError("input sample should be a 2d tensor")
-    return torch.sum(torch.mul(input_sample, cell_area)).div(torch.sum(cell_area))
+
+    return torch.sum(torch.mul(input_sample, cell_area), dim=-1).div(torch.sum(cell_area, dim=-1))
