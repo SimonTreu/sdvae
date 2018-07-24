@@ -2,6 +2,7 @@ from torch.utils.data import Dataset
 import os.path
 import torch
 import random
+from utils.upscale import get_average
 
 TORCH_EXTENSION = [
     '.pt'
@@ -32,13 +33,14 @@ class ClimateDataset(Dataset):
 
         input_sample = sample[:, h_offset:h_offset+self.fine_size, w_offset:w_offset+self.fine_size]
         # get precipitation
+        cell_area = input_sample[-1]
         input_sample = input_sample[0]
 
         # TODO normalization
 
-        # TODO get upscaled value for this 8x8 cell
+        average_value = get_average(input_sample, cell_area=cell_area)
 
-        return {'input_sample': input_sample, 'input_path': sample_path}
+        return {'input_sample': input_sample, 'input_path': sample_path, 'average_value': average_value}
 
 
 # Helper Methods
