@@ -20,7 +20,7 @@ class Arg:
         self.n_epochs = 10
         self.log_interval = 10
         self.plot_interval = 250
-        self.lambda_cycle_l1 = 10
+        self.lambda_cycle_l1 = 1000
 
 
 args = Arg()
@@ -36,7 +36,7 @@ climate_data_loader = DataLoader(climate_data,
 # load the model
 edgan_model = Edgan(opt=args)
 # todo which optimizer?
-optimizer = torch.optim.Adam(edgan_model.parameters(), lr=1e-3)
+optimizer = torch.optim.Adam(edgan_model.parameters(), lr=1e-4)
 
 for epoch in range(args.n_epochs):
     train_loss = 0
@@ -60,7 +60,7 @@ for epoch in range(args.n_epochs):
                     100. * batch_idx / len(climate_data_loader),
                     bce.item() / len(input_sample),
                     kld.item() / len(input_sample),
-                    cycle_loss.item(),
+                    cycle_loss.item()/ len(input_sample),
                     loss.item() / len(input_sample)))
         if batch_idx % args.plot_interval == 0:
             vmin = 0

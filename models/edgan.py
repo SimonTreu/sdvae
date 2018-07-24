@@ -27,7 +27,7 @@ class Edgan(nn.Module):
         self.decode = nn.Sequential(nn.Linear(self.nz, hidden_layer_size),
                                     nn.ReLU(),
                                     nn.Linear(hidden_layer_size, self.input_size),
-                                    nn.Sigmoid()
+                                    nn.ReLU()
                                     )
 
     def forward(self, x):
@@ -49,7 +49,7 @@ class Edgan(nn.Module):
     # Reconstruction + KL divergence losses summed over all elements and batch
     def loss_function(self, recon_x, x, mu, log_var, average_value, cell_area):
         # todo add cycle cost
-        BCE = nn.functional.binary_cross_entropy(recon_x, x.view(-1, self.input_size), size_average=False)
+        BCE = nn.functional.mse_loss(recon_x, x.view(-1, self.input_size), size_average=False)
 
         # see Appendix B from VAE paper:
         # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
