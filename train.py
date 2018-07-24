@@ -3,6 +3,8 @@ from torch.utils.data import DataLoader
 from models.edgan import Edgan
 import torch
 import matplotlib.pyplot as plt
+from netCDF4 import Dataset
+import os.path
 
 
 class Arg:
@@ -21,6 +23,14 @@ class Arg:
         self.log_interval = 10
         self.plot_interval = 250
         self.lambda_cycle_l1 = 1000
+        # load normalization values
+        with Dataset(os.path.join(self.dataroot, "stats", "mean.nc4"), "r", format="NETCDF4") as rootgrp:
+            mean = float(rootgrp.variables['pr'][:])
+
+        with Dataset(os.path.join(self.dataroot, "stats", "std.nc4"), "r", format="NETCDF4") as rootgrp:
+            std = float(rootgrp.variables['pr'][:])
+
+        self.mean_std = {'mean': mean, 'std': std}
 
 
 args = Arg()
@@ -36,7 +46,7 @@ climate_data_loader = DataLoader(climate_data,
 # load the model
 edgan_model = Edgan(opt=args)
 # todo which optimizer?
-optimizer = torch.optim.Adam(edgan_model.parameters(), lr=1e-4)
+optimizer = torch.optim.Adam(edgan_model.parameters(), lr=1e-3)
 
 for epoch in range(args.n_epochs):
     train_loss = 0
@@ -54,13 +64,13 @@ for epoch in range(args.n_epochs):
         train_loss += loss.item()
         optimizer.step()
         if batch_idx % args.log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tBCE Loss: {:.5f}\tKL Loss: {:.5f}\tcycle Loss {:.5f}'
-                  '\tLoss: {:.5f}'.format(
+            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tBCE Loss: {:.7f}\tKL Loss: {:.7f}\tcycle Loss {:.7f}'
+                  '\tLoss: {:.7f}'.format(
                     epoch, batch_idx * len(input_sample), len(climate_data_loader.dataset),
                     100. * batch_idx / len(climate_data_loader),
                     bce.item() / len(input_sample),
                     kld.item() / len(input_sample),
-                    cycle_loss.item()/ len(input_sample),
+                    cycle_loss.item() / len(input_sample),
                     loss.item() / len(input_sample)))
             # todo make logging cluster ready
         if batch_idx % args.plot_interval == 0:

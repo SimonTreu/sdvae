@@ -16,7 +16,7 @@ class ClimateDataset(Dataset):
         self.dir_samples = os.path.join(opt.dataroot, opt.phase)
         self.sample_paths = sorted(get_sample_files(self.dir_samples))
         self.fine_size = opt.fine_size
-        # self.norm_parameters = opt.mean_std Todo implement getting the norm parameters while reading the arguments
+        self.norm_parameters = opt.mean_std
 
     def __len__(self):
         return len(self.sample_paths)
@@ -36,9 +36,10 @@ class ClimateDataset(Dataset):
         cell_area = input_sample[-1]
         input_sample = input_sample[0]
 
-        # TODO normalization
+        # normalize parameters
+        input_sample.sub_(self.norm_parameters['mean']).div_(self.norm_parameters['std'])
 
-        average_value = get_average(input_sample.contiguous().view(1,-1), cell_area=cell_area.contiguous().view(1,-1))
+        average_value = get_average(input_sample.contiguous().view(1, -1), cell_area=cell_area.contiguous().view(1, -1))
 
         return {'input_sample': input_sample, 'input_path': sample_path, 'average_value': average_value,
                 'cell_area': cell_area}
