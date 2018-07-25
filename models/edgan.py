@@ -10,6 +10,7 @@ class Edgan(nn.Module):
         self.nz = opt.nz
         self.lambda_cycle_l1 = opt.lambda_cycle_l1
         self.input_size = opt.fine_size ** 2
+        threshold = opt.threshold
         hidden_layer_size = opt.fine_size//2 ** 2
 
         # first layer (shared by mu and log_var):
@@ -26,7 +27,7 @@ class Edgan(nn.Module):
         self.decode = nn.Sequential(nn.Linear(self.nz+1, hidden_layer_size),
                                     nn.ReLU(),
                                     nn.Linear(hidden_layer_size, self.input_size),
-                                    nn.ReLU()
+                                    nn.Threshold(value=threshold, threshold=threshold)
                                     )
 
     def forward(self, x, average_value):
@@ -47,6 +48,7 @@ class Edgan(nn.Module):
     # todo read if that can be defined somewhere else
     # Reconstruction + KL divergence losses summed over all elements and batch
     def loss_function(self, recon_x, x, mu, log_var, average_value, cell_area):
+        # todo change name of BCE
         BCE = nn.functional.mse_loss(recon_x, x.view(-1, self.input_size), size_average=False)
 
         # see Appendix B from VAE paper:
@@ -57,6 +59,6 @@ class Edgan(nn.Module):
 
         # cycle loss as mean squared error
         recon_average = get_average(recon_x, cell_area.contiguous().view(-1, self.input_size))
-        cycle_loss = torch.mean(torch.abs(average_value.view(-1).sub(recon_average))) * self.lambda_cycle_l1
+        cycle_loss = torch.mean(average_value.view(-1).sub(recon_average).pow(2)) * self.lambda_cycle_l1
         return BCE, KLD, cycle_loss, BCE + KLD + cycle_loss
 
