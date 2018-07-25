@@ -4,7 +4,7 @@ from models.edgan import Edgan
 import torch
 import matplotlib.pyplot as plt
 from netCDF4 import Dataset
-import os.path
+import os
 
 
 class Arg:
@@ -18,10 +18,10 @@ class Arg:
         self.n_threads = 4
         # Number of hidden variables
         self.nz = 2
-        self.cuda = False
-        self.n_epochs = 10
-        self.log_interval = 10
-        self.plot_interval = 250
+        self.gpu_ids = [-1]
+        self.n_epochs = 20
+        self.log_interval = 100
+        self.plot_interval = 1e6
         self.lambda_cycle_l1 = 1000
         # load normalization values
         with Dataset(os.path.join(self.dataroot, "stats", "mean.nc4"), "r", format="NETCDF4") as rootgrp:
@@ -31,10 +31,19 @@ class Arg:
             std = float(rootgrp.variables['pr'][:])
 
         self.mean_std = {'mean': mean, 'std': std}
+        self.threshold = (0-self.mean_std['mean'])/self.mean_std['std']
+        self.name = 'vae_07_25'
+        self.lr = 5e-3
+        self.save_interval = 1
 
 
 args = Arg()
-device = torch.device("cuda" if args.cuda else "cpu")
+device = torch.device("cuda" if args.gpu_ids[0] >= 0 else "cpu")
+
+# create save dir
+save_root = os.path.join('checkpoints', args.name)
+if not os.path.isdir(save_root):
+    os.makedirs(save_root)
 
 # get the data
 climate_data = ClimateDataset(opt=args)
@@ -45,8 +54,7 @@ climate_data_loader = DataLoader(climate_data,
 
 # load the model
 edgan_model = Edgan(opt=args)
-# todo which optimizer?
-optimizer = torch.optim.Adam(edgan_model.parameters(), lr=1e-3)
+optimizer = torch.optim.Adam(edgan_model.parameters(), lr=args.lr)
 
 for epoch in range(args.n_epochs):
     train_loss = 0
@@ -63,6 +71,8 @@ for epoch in range(args.n_epochs):
         loss.backward()
         train_loss += loss.item()
         optimizer.step()
+
+        # todo add visualizer class
         if batch_idx % args.log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tBCE Loss: {:.7f}\tKL Loss: {:.7f}\tcycle Loss {:.7f}'
                   '\tLoss: {:.7f}'.format(
@@ -74,13 +84,21 @@ for epoch in range(args.n_epochs):
                     loss.item() / len(input_sample)))
             # todo make logging cluster ready
         if batch_idx % args.plot_interval == 0:
-            vmin = 0
-            vmax = 1e-3
+            vmin = args.threshold
+            vmax = 2
             plt.imshow(input_sample[0].view(8, 8).detach().numpy(), vmin=vmin, vmax=vmax)
             plt.show()
             plt.imshow(recon_x[0].view(8, 8).detach().numpy(), vmin=vmin, vmax=vmax)
             plt.show()
             # todo make plotting cluster ready
 
+    if epoch % args.save_interval == 0:
+        save_name = "epoch_{}.pth".format(epoch)
+        save_dir = os.path.join(save_root, save_name)
+        if len(args.gpu_ids) > 0 and torch.cuda.is_available():
+            torch.save(edgan_model.module.cpu().state_dict(), save_dir)
+            edgan_model.cuda(args.gpu_ids[0])
+        else:
+            torch.save(edgan_model.cpu().state_dict(), save_dir)
     print('====> Epoch: {} Average loss: {:.4f}'.format(
           epoch, train_loss / len(climate_data_loader.dataset)))

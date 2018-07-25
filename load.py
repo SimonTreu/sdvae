@@ -10,8 +10,8 @@ import numpy as np
 from matplotlib.widgets import Slider
 
 
+# TOdo add that back to train.py
 class Arg:
-    # Todo do that with an arg_parser
     def __init__(self):
         self.dataroot = "data/wind"
         self.phase = "train"
@@ -21,7 +21,7 @@ class Arg:
         self.n_threads = 4
         # Number of hidden variables
         self.nz = 2
-        self.cuda = False
+        self.gpu_ids = [-1]
         self.n_epochs = 10
         self.log_interval = 10
         self.plot_interval = 250
@@ -35,10 +35,19 @@ class Arg:
 
         self.mean_std = {'mean': mean, 'std': std}
         self.threshold = (0-self.mean_std['mean'])/self.mean_std['std']
+        self.name = 'vae_07_25'
+        self.lr = 5e-3
+        self.save_interval = 1
+        self.load_epoch = 0
 
 
 args = Arg()
-device = torch.device("cuda" if args.cuda else "cpu")
+device = torch.device("cuda" if args.gpu_ids[0] >= 0 else "cpu")
+
+# create save dir
+save_root = os.path.join('checkpoints', args.name)
+if not os.path.isdir(save_root):
+    os.makedirs(save_root)
 
 # get the data
 climate_data = ClimateDataset(opt=args)
@@ -49,7 +58,10 @@ climate_data_loader = DataLoader(climate_data,
 
 # load the model
 edgan_model = Edgan(opt=args)
-edgan_model.load_state_dict(torch.load('checkpoints/Epoch9.pth'))
+
+save_name = "epoch_{}.pth".format(args.load_epoch)
+save_dir = os.path.join(save_root, save_name)
+edgan_model.load_state_dict(torch.load(save_dir))
 
 
 # plotting
