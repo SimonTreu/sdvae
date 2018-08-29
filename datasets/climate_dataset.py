@@ -34,15 +34,16 @@ class ClimateDataset(Dataset):
         input_sample = sample[:, h_offset:h_offset+self.fine_size, w_offset:w_offset+self.fine_size]
         # get precipitation
         cell_area = input_sample[-1]
-        input_sample = input_sample[0]
+        orog = input_sample[-2]
+        fine_pr = input_sample[0]
 
         # normalize parameters
-        input_sample.sub_(self.norm_parameters['mean']).div_(self.norm_parameters['std'])
 
-        average_value = get_average(input_sample.contiguous().view(1, -1), cell_area=cell_area.contiguous().view(1, -1))
+        coarse_pr = get_average(fine_pr.contiguous().view(1, -1), cell_area=cell_area.contiguous().view(1, -1))
+        fine_pr.sub_(self.norm_parameters['mean']).div_(self.norm_parameters['std'])
 
-        return {'input_sample': input_sample, 'input_path': sample_path, 'average_value': average_value,
-                'cell_area': cell_area}
+        return {'fine_pr': fine_pr, 'file_path': sample_path, 'coarse_pr': coarse_pr,
+                'cell_area': cell_area, 'orog':orog}
 
 
 # Helper Methods

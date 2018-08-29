@@ -18,6 +18,8 @@ class Arg:
         self.n_threads = 4
         # Number of hidden variables
         self.nz = 2
+        # size of encoded orography set 0 if non should be used
+        self.no = 8
         self.gpu_ids = [-1]
         self.n_epochs = 20
         self.log_interval = 100
@@ -32,7 +34,7 @@ class Arg:
 
         self.mean_std = {'mean': mean, 'std': std}
         self.threshold = (0-self.mean_std['mean'])/self.mean_std['std']
-        self.name = 'vae_07_25'
+        self.name = 'vae_08_29'
         self.lr = 5e-3
         self.save_interval = 1
 
@@ -54,20 +56,22 @@ climate_data_loader = DataLoader(climate_data,
 
 # load the model
 edgan_model = Edgan(opt=args)
-optimizer = torch.optim.Adam(edgan_model.parameters(), lr=args.lr)
+optimizer = torch.optim.Adam(edgan_model.parameters(), lr=args.lr, amsgrad=True) # TODO which optimizer / lr / lr decay
 
 for epoch in range(args.n_epochs):
     train_loss = 0
     edgan_model.train()
     for batch_idx, data in enumerate(climate_data_loader, 0):
-        input_sample = data['input_sample'].to(device)
-        average_value = data['average_value'].to(device)
+        fine_pr = data['fine_pr'].to(device)
+        coarse_pr = data['coarse_pr'].to(device)
         cell_area = data['cell_area'].to(device)
+        orog = data['orog'].to(device)
+
 
         optimizer.zero_grad()
-        recon_x, mu, log_var = edgan_model(input_sample, average_value)
-        bce, kld, cycle_loss, loss = edgan_model.loss_function(recon_x, input_sample, mu, log_var,
-                                                               average_value, cell_area)
+        recon_x, mu, log_var = edgan_model(fine_pr=fine_pr, coarse_pr=coarse_pr, orog=orog)
+        bce, kld, cycle_loss, loss = edgan_model.loss_function(recon_x, fine_pr, mu, log_var,
+                                                               coarse_pr, cell_area)
         loss.backward()
         train_loss += loss.item()
         optimizer.step()
@@ -76,17 +80,17 @@ for epoch in range(args.n_epochs):
         if batch_idx % args.log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tBCE Loss: {:.7f}\tKL Loss: {:.7f}\tcycle Loss {:.7f}'
                   '\tLoss: {:.7f}'.format(
-                    epoch, batch_idx * len(input_sample), len(climate_data_loader.dataset),
+                    epoch, batch_idx * len(fine_pr), len(climate_data_loader.dataset),
                     100. * batch_idx / len(climate_data_loader),
-                    bce.item() / len(input_sample),
-                    kld.item() / len(input_sample),
-                    cycle_loss.item() / len(input_sample),
-                    loss.item() / len(input_sample)))
+                    bce.item() / len(fine_pr),
+                    kld.item() / len(fine_pr),
+                    cycle_loss.item() / len(fine_pr),
+                    loss.item() / len(fine_pr)))
             # todo make logging cluster ready
         if batch_idx % args.plot_interval == 0:
             vmin = args.threshold
             vmax = 2
-            plt.imshow(input_sample[0].view(8, 8).detach().numpy(), vmin=vmin, vmax=vmax)
+            plt.imshow(fine_pr[0].view(8, 8).detach().numpy(), vmin=vmin, vmax=vmax)
             plt.show()
             plt.imshow(recon_x[0].view(8, 8).detach().numpy(), vmin=vmin, vmax=vmax)
             plt.show()

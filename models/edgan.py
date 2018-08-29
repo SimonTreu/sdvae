@@ -8,6 +8,7 @@ class Edgan(nn.Module):
         super(Edgan, self).__init__()
         # variables
         self.nz = opt.nz
+        self.no = opt.no # size of encoded orography
         self.lambda_cycle_l1 = opt.lambda_cycle_l1
         self.input_size = opt.fine_size ** 2
         threshold = opt.threshold
@@ -24,18 +25,33 @@ class Edgan(nn.Module):
         self.log_var = nn.Sequential(fc_layer_1, relu_1, log_var)
 
         # decoder
-        self.decode = nn.Sequential(nn.Linear(self.nz+1, hidden_layer_size),
+        self.decode = nn.Sequential(nn.Linear(self.nz+self.no+1, hidden_layer_size),
                                     nn.ReLU(),
                                     nn.Linear(hidden_layer_size, self.input_size),
                                     nn.Threshold(value=threshold, threshold=threshold)
                                     )
+        if self.no > 0:
+            self.encode_orog = nn.Sequential(nn.Conv2d(in_channels=1,out_channels=self.no//2,
+                                                       kernel_size=3, padding=1, stride=1),
+                                             nn.ReLU(),
+                                             nn.MaxPool2d(kernel_size=2),
+                                             nn.Conv2d(in_channels=self.no//2, out_channels=self.no,
+                                                       kernel_size=3, padding=1, stride=1),
+                                             nn.ReLU(),
+                                             nn.MaxPool2d(kernel_size=4),
+                                             )
 
-    def forward(self, x, average_value):
-        x = x.view(-1, self.input_size)
-        mu = self.mu(x)
-        log_var = self.log_var(x)
+    def forward(self, fine_pr, coarse_pr, orog):
+        fine_pr = fine_pr.view(-1, self.input_size)
+        mu = self.mu(fine_pr)
+        log_var = self.log_var(fine_pr)
         z = self.reparameterize(mu, log_var)
-        return self.decode(torch.cat((z,average_value),1)), mu, log_var
+        if self.no > 0:
+            orog.unsqueeze_(1)  # bring into shape (N, n_ch, W, H)
+            o = self.encode_orog(orog)
+            return self.decode(torch.cat((z, coarse_pr, o.view(-1,self.no)), 1)), mu, log_var
+        else:
+            return self.decode(torch.cat((z, coarse_pr), 1)), mu, log_var
 
     def reparameterize(self, mu, log_var):
         if self.training:
@@ -47,7 +63,7 @@ class Edgan(nn.Module):
 
     # todo read if that can be defined somewhere else
     # Reconstruction + KL divergence losses summed over all elements and batch
-    def loss_function(self, recon_x, x, mu, log_var, average_value, cell_area):
+    def loss_function(self, recon_x, x, mu, log_var, coarse_pr, cell_area):
         # todo change name of BCE
         BCE = nn.functional.mse_loss(recon_x, x.view(-1, self.input_size), size_average=False)
 
@@ -59,6 +75,6 @@ class Edgan(nn.Module):
 
         # cycle loss as mean squared error
         recon_average = get_average(recon_x, cell_area.contiguous().view(-1, self.input_size))
-        cycle_loss = torch.mean(average_value.view(-1).sub(recon_average).pow(2)) * self.lambda_cycle_l1
+        cycle_loss = torch.mean(coarse_pr.view(-1).sub(recon_average).pow(2)) * self.lambda_cycle_l1
         return BCE, KLD, cycle_loss, BCE + KLD + cycle_loss
 
