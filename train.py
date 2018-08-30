@@ -56,6 +56,7 @@ for epoch in range(opt.n_epochs):
                     kld.item() / len(fine_pr),
                     cycle_loss.item() / len(fine_pr),
                     loss.item() / len(fine_pr)))
+                    # todo create logging file
                     # todo make logging cluster ready
         if batch_idx % opt.plot_interval == 0:
             img_id += 1

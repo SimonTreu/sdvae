@@ -12,6 +12,7 @@ class Edgan(nn.Module):
         self.lambda_cycle_l1 = opt.lambda_cycle_l1
         self.input_size = opt.fine_size ** 2
         threshold = opt.threshold
+        # todo clean up this code a bit
         hidden_layer_size = opt.fine_size//2 ** 2
 
         # first layer (shared by mu and log_var):
@@ -23,6 +24,7 @@ class Edgan(nn.Module):
         log_var = nn.Linear(hidden_layer_size, self.nz)
         self.mu = nn.Sequential(fc_layer_1, relu_1, mu)
         self.log_var = nn.Sequential(fc_layer_1, relu_1, log_var)
+        # todo better encoder
 
         decoder_input_size = self.nz+self.no+1
         self.decode = nn.Sequential(nn.ConvTranspose2d(in_channels=decoder_input_size,
@@ -37,6 +39,7 @@ class Edgan(nn.Module):
                                     nn.Threshold(value=threshold, threshold=threshold)
                                     )
         if self.no > 0:
+            # todo add Norm
             self.encode_orog = nn.Sequential(nn.Conv2d(in_channels=1,out_channels=self.no//2,
                                                        kernel_size=3, padding=1, stride=1),
                                              nn.ReLU(),
