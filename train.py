@@ -1,3 +1,4 @@
+import numpy as np
 from datasets.climate_dataset import ClimateDataset
 from torch.utils.data import DataLoader
 from models.edgan import Edgan
@@ -6,6 +7,7 @@ import matplotlib.pyplot as plt
 from netCDF4 import Dataset
 import os
 from options.base_options import BaseOptions
+from utils import util
 
 opt = BaseOptions().parse()
 device = torch.device("cuda" if len(opt.gpu_ids) > 0 else "cpu")
@@ -27,6 +29,7 @@ edgan_model = Edgan(opt=opt)
 optimizer = torch.optim.Adam(edgan_model.parameters(), lr=opt.lr)  # TODO which optimizer / lr / lr decay
 
 for epoch in range(opt.n_epochs):
+    img_id = 0
     train_loss = 0
     edgan_model.train()
     for batch_idx, data in enumerate(climate_data_loader, 0):
@@ -53,15 +56,25 @@ for epoch in range(opt.n_epochs):
                     kld.item() / len(fine_pr),
                     cycle_loss.item() / len(fine_pr),
                     loss.item() / len(fine_pr)))
-        # todo make logging cluster ready
+                    # todo make logging cluster ready
         if batch_idx % opt.plot_interval == 0:
-            vmin = opt.threshold
-            vmax = 2
-            plt.imshow(fine_pr[0].view(8, 8).detach().numpy(), vmin=vmin, vmax=vmax)
-            plt.show()
-            plt.imshow(recon_x[0].view(8, 8).detach().numpy(), vmin=vmin, vmax=vmax)
-            plt.show()
-            # todo make plotting cluster ready
+            img_id += 1
+            image_path = os.path.join('checkpoints', opt.name, 'images')
+            image_name = "Epoch{}_Image{}.jpg".format(epoch, img_id)
+            util.mkdir(image_path)
+            n_images = 5
+            fig, axes = plt.subplots(2, n_images, sharex='col', sharey='row')
+            rand_idx = np.random.randint(0, opt.batch_size, n_images)
+            for i in range(n_images):
+                vmin = opt.threshold
+                vmax = 5
+                axes[0, i].imshow(fine_pr[rand_idx[i]].view(8, 8).detach().numpy(), vmin=vmin, vmax=vmax, cmap=plt.get_cmap('jet'))
+                axes[1, i].imshow(recon_x[rand_idx[i]].view(8, 8).detach().numpy(), vmin=vmin, vmax=vmax, cmap=plt.get_cmap('jet'))
+
+            axes[0, 0].set_title('Original Precipitation')
+            axes[1, 0].set_title('Reconstructed Precipitation')
+            fig.savefig(os.path.join(image_path, image_name))
+            plt.close(fig)
 
     if epoch % opt.save_interval == 0:
         save_name = "epoch_{}.pth".format(epoch)
@@ -73,3 +86,11 @@ for epoch in range(opt.n_epochs):
             torch.save(edgan_model.cpu().state_dict(), save_dir)
     print('====> Epoch: {} Average loss: {:.4f}'.format(
           epoch, train_loss / len(climate_data_loader.dataset)))
+
+save_name = "epoch_{}.final.pth".format(epoch)
+save_dir = os.path.join(save_root, save_name)
+if len(opt.gpu_ids) > 0 and torch.cuda.is_available():
+    torch.save(edgan_model.module.cpu().state_dict(), save_dir)
+    edgan_model.cuda(opt.gpu_ids[0])
+else:
+    torch.save(edgan_model.cpu().state_dict(), save_dir)
