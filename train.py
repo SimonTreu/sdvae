@@ -34,8 +34,8 @@ class Arg:
 
         self.mean_std = {'mean': mean, 'std': std}
         self.threshold = (0-self.mean_std['mean'])/self.mean_std['std']
-        self.name = 'vae_08_29'
-        self.lr = 5e-3
+        self.name = 'vae_08_29_2'
+        self.lr = 1e-3
         self.save_interval = 1
 
 
@@ -56,7 +56,7 @@ climate_data_loader = DataLoader(climate_data,
 
 # load the model
 edgan_model = Edgan(opt=args)
-optimizer = torch.optim.Adam(edgan_model.parameters(), lr=args.lr, amsgrad=True) # TODO which optimizer / lr / lr decay
+optimizer = torch.optim.Adam(edgan_model.parameters(), lr=args.lr)  # TODO which optimizer / lr / lr decay
 
 for epoch in range(args.n_epochs):
     train_loss = 0
@@ -86,7 +86,7 @@ for epoch in range(args.n_epochs):
                     kld.item() / len(fine_pr),
                     cycle_loss.item() / len(fine_pr),
                     loss.item() / len(fine_pr)))
-            # todo make logging cluster ready
+        # todo make logging cluster ready
         if batch_idx % args.plot_interval == 0:
             vmin = args.threshold
             vmax = 2

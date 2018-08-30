@@ -24,7 +24,7 @@ class Edgan(nn.Module):
         self.mu = nn.Sequential(fc_layer_1, relu_1, mu)
         self.log_var = nn.Sequential(fc_layer_1, relu_1, log_var)
 
-        # decoder
+        # decoder TODO better generator
         self.decode = nn.Sequential(nn.Linear(self.nz+self.no+1, hidden_layer_size),
                                     nn.ReLU(),
                                     nn.Linear(hidden_layer_size, self.input_size),
