@@ -13,19 +13,29 @@ class Edgan(nn.Module):
         self.input_size = opt.fine_size ** 2
 
         threshold = opt.threshold
-        # todo clean up this code a bit
-        hidden_layer_size = (opt.fine_size//2) ** 2
 
-        # first layer (shared by mu and log_var):
-        fc_layer_1 = nn.Linear(self.input_size, hidden_layer_size)
-        relu_1 = nn.ReLU()
+        # hidden layer (shared by mu and log_var):
+        hidden_layer = [nn.Conv2d(in_channels=1, out_channels=self.nz * 2,
+                                  kernel_size=3, padding=1, stride=1),
+                        nn.BatchNorm2d(self.nz * 2),
+                        nn.ReLU(),
+                        nn.MaxPool2d(kernel_size=2)]
         # mu
-        mu = nn.Linear(hidden_layer_size, self.nz)
+
+        mu = [nn.Conv2d(in_channels=self.nz*2, out_channels=self.nz,
+                        kernel_size=3, padding=1, stride=1),
+              nn.BatchNorm2d(self.nz),
+              nn.ReLU(),
+              nn.MaxPool2d(kernel_size=4)]
         # log_var
-        log_var = nn.Linear(hidden_layer_size, self.nz)
-        self.mu = nn.Sequential(fc_layer_1, relu_1, mu)
-        self.log_var = nn.Sequential(fc_layer_1, relu_1, log_var)
-        # todo better encoder
+        log_var = [nn.Conv2d(in_channels=self.nz*2, out_channels=self.nz,
+                             kernel_size=3, padding=1, stride=1),
+                   nn.BatchNorm2d(self.nz),
+                   nn.ReLU(),
+                   nn.MaxPool2d(kernel_size=4)]
+
+        self.mu = nn.Sequential(*hidden_layer, *mu)
+        self.log_var = nn.Sequential(*hidden_layer, *log_var)
 
         decoder_input_size = self.nz+self.no+1
         # todo variable number of filters
@@ -42,12 +52,12 @@ class Edgan(nn.Module):
                                     nn.Threshold(value=threshold, threshold=threshold)
                                     )
         if self.no > 0:
-            self.encode_orog = nn.Sequential(nn.Conv2d(in_channels=1,out_channels=self.no//2,
+            self.encode_orog = nn.Sequential(nn.Conv2d(in_channels=1,out_channels=self.no*2,
                                                        kernel_size=3, padding=1, stride=1),
-                                             nn.BatchNorm2d(self.no//2),
+                                             nn.BatchNorm2d(self.no*2),
                                              nn.ReLU(),
                                              nn.MaxPool2d(kernel_size=2),
-                                             nn.Conv2d(in_channels=self.no//2, out_channels=self.no,
+                                             nn.Conv2d(in_channels=self.no*2, out_channels=self.no,
                                                        kernel_size=3, padding=1, stride=1),
                                              nn.BatchNorm2d(self.no),
                                              nn.ReLU(),
@@ -55,16 +65,17 @@ class Edgan(nn.Module):
                                              )
 
     def forward(self, fine_pr, coarse_pr, orog):
-        fine_pr = fine_pr.view(-1, self.input_size)
+        # todo clean up the formats (.view and .unsqueeze)
+        fine_pr = fine_pr.unsqueeze(1)
         mu = self.mu(fine_pr)
         log_var = self.log_var(fine_pr)
         z = self.reparameterize(mu, log_var)
         if self.no > 0:
             orog.unsqueeze_(1)  # bring into shape (N, n_ch, W, H)
             o = self.encode_orog(orog)
-            return self.decode(torch.cat((z, coarse_pr, o.view(-1,self.no)), 1).unsqueeze(-1).unsqueeze(-1)), mu, log_var
+            return self.decode(torch.cat((z.view(-1, self.nz), coarse_pr, o.view(-1,self.no)), 1).unsqueeze(-1).unsqueeze(-1)), mu.view(-1, self.nz), log_var.view(-1, self.nz)
         else:
-            return self.decode(torch.cat((z, coarse_pr), 1)), mu, log_var
+            return self.decode(torch.cat((z.view(-1, self.nz), coarse_pr), 1)), mu.view(-1, self.nz), log_var.view(-1, self.nz)
 
     def reparameterize(self, mu, log_var):
         if self.training:
