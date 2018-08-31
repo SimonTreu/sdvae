@@ -12,27 +12,23 @@ class Edgan(nn.Module):
         self.lambda_cycle_l1 = opt.lambda_cycle_l1
         self.input_size = opt.fine_size ** 2
 
+        d_hidden = opt.d_hidden
         threshold = opt.threshold
 
         # hidden layer (shared by mu and log_var):
-        hidden_layer = [nn.Conv2d(in_channels=1, out_channels=self.nz * 2,
+        hidden_layer = [nn.Conv2d(in_channels=1, out_channels=d_hidden,
                                   kernel_size=3, padding=1, stride=1),
-                        nn.BatchNorm2d(self.nz * 2),
+                        nn.BatchNorm2d(d_hidden),
                         nn.ReLU(),
                         nn.MaxPool2d(kernel_size=2)]
-        # mu
 
-        mu = [nn.Conv2d(in_channels=self.nz*2, out_channels=self.nz,
-                        kernel_size=3, padding=1, stride=1),
-              nn.BatchNorm2d(self.nz),
-              nn.ReLU(),
-              nn.MaxPool2d(kernel_size=4)]
+        # mu
+        mu = [nn.Conv2d(in_channels=d_hidden, out_channels=self.nz,
+                        kernel_size=4, padding=0, stride=1)]
+
         # log_var
-        log_var = [nn.Conv2d(in_channels=self.nz*2, out_channels=self.nz,
-                             kernel_size=3, padding=1, stride=1),
-                   nn.BatchNorm2d(self.nz),
-                   nn.ReLU(),
-                   nn.MaxPool2d(kernel_size=4)]
+        log_var = [nn.Conv2d(in_channels=d_hidden, out_channels=self.nz,
+                             kernel_size=4, padding=0, stride=1)]
 
         self.mu = nn.Sequential(*hidden_layer, *mu)
         self.log_var = nn.Sequential(*hidden_layer, *log_var)
@@ -48,7 +44,6 @@ class Edgan(nn.Module):
                                     nn.ConvTranspose2d(in_channels=decoder_input_size*8,
                                                        out_channels=1, kernel_size=4,
                                                        stride=2, padding=1),
-                                    nn.BatchNorm2d(1),
                                     nn.Threshold(value=threshold, threshold=threshold)
                                     )
         if self.no > 0:
@@ -58,10 +53,7 @@ class Edgan(nn.Module):
                                              nn.ReLU(),
                                              nn.MaxPool2d(kernel_size=2),
                                              nn.Conv2d(in_channels=self.no*2, out_channels=self.no,
-                                                       kernel_size=3, padding=1, stride=1),
-                                             nn.BatchNorm2d(self.no),
-                                             nn.ReLU(),
-                                             nn.MaxPool2d(kernel_size=4),
+                                                       kernel_size=4, padding=0, stride=1)
                                              )
 
     def forward(self, fine_pr, coarse_pr, orog):
@@ -75,7 +67,7 @@ class Edgan(nn.Module):
             o = self.encode_orog(orog)
             return self.decode(torch.cat((z.view(-1, self.nz), coarse_pr, o.view(-1,self.no)), 1).unsqueeze(-1).unsqueeze(-1)), mu.view(-1, self.nz), log_var.view(-1, self.nz)
         else:
-            return self.decode(torch.cat((z.view(-1, self.nz), coarse_pr), 1)), mu.view(-1, self.nz), log_var.view(-1, self.nz)
+            return self.decode(torch.cat((z.view(-1, self.nz), coarse_pr), 1).unsqueeze(-1).unsqueeze(-1)), mu.view(-1, self.nz), log_var.view(-1, self.nz)
 
     def reparameterize(self, mu, log_var):
         if self.training:
