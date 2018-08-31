@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import os.path
 import numpy as np
 from utils import util
+import csv
 
 
 class Visualizer:
@@ -11,7 +12,12 @@ class Visualizer:
         self.n_images = n_images
         self.training_size = training_size
         self.n_batches = n_batches
+        self.csv_name = os.path.join('checkpoints', opt.name, 'loss.csv')
         util.mkdir(self.image_path)
+        with open(self.csv_name, "w") as log_csv:
+            csv_writer = csv.writer(log_csv, delimiter= ',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            title =['epoch', 'iters', 'mse', 'kl', 'cycle', 'total']
+            csv_writer.writerow(title)
 
     def plot(self, fine_pr, recon_pr, image_name):
         vmin = self.opt.threshold
@@ -38,4 +44,12 @@ class Visualizer:
             kld.item() / self.opt.batch_size,
             cycle_loss.item() / self.opt.batch_size,
             loss.item() / self.opt.batch_size))
-        # todo make a logging file
+        # csv title: 'epoch', 'iters', 'mse', 'kl', 'cycle', 'total' TODO add time and time_data
+        with open(self.csv_name, "a") as log_csv:
+            csv_writer = csv.writer(log_csv, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            row = [epoch, batch_idx,
+                   mse.item() / self.opt.batch_size,
+                   kld.item() / self.opt.batch_size,
+                   cycle_loss.item() / self.opt.batch_size,
+                   loss.item() / self.opt.batch_size]
+            csv_writer.writerow(row)

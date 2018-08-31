@@ -27,6 +27,8 @@ class Edgan(nn.Module):
         # todo better encoder
 
         decoder_input_size = self.nz+self.no+1
+        # todo variable number of filters
+        # todo skip connections
         self.decode = nn.Sequential(nn.ConvTranspose2d(in_channels=decoder_input_size,
                                                        out_channels=decoder_input_size * 8,
                                                        kernel_size=4, stride=1, padding=0),
