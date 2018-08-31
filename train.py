@@ -61,6 +61,7 @@ for epoch in range(opt.n_epochs):
             torch.save(edgan_model.cpu().state_dict(), save_dir)
     print('====> Epoch: {} Average loss: {:.4f}'.format(
           epoch, train_loss / len(climate_data_loader.dataset)))
+    # todo print all average losses
 
 save_name = "epoch_{}.final.pth".format(epoch)
 save_dir = os.path.join(save_root, save_name)

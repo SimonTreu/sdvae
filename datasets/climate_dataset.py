@@ -35,6 +35,7 @@ class ClimateDataset(Dataset):
         # get precipitation
         cell_area = input_sample[-1]
         orog = input_sample[-2]
+        # todo add wind
         fine_pr = input_sample[0]
 
         # normalize parameters

@@ -20,6 +20,7 @@ class Visualizer:
             csv_writer.writerow(title)
 
     def plot(self, fine_pr, recon_pr, image_name):
+        # todo plot topography
         vmin = self.opt.threshold
         vmax = 6
         fig, axes = plt.subplots(2, self.n_images, sharex='col', sharey='row')
