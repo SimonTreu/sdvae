@@ -1,13 +1,10 @@
-import numpy as np
 from datasets.climate_dataset import ClimateDataset
 from torch.utils.data import DataLoader
 from models.edgan import Edgan
+from utils.visualizer import Visualizer
 import torch
-import matplotlib.pyplot as plt
-from netCDF4 import Dataset
 import os
 from options.base_options import BaseOptions
-from utils import util
 
 opt = BaseOptions().parse()
 device = torch.device("cuda" if len(opt.gpu_ids) > 0 else "cpu")
@@ -27,6 +24,7 @@ climate_data_loader = DataLoader(climate_data,
 # load the model
 edgan_model = Edgan(opt=opt)
 optimizer = torch.optim.Adam(edgan_model.parameters(), lr=opt.lr)  # TODO which optimizer / lr / lr decay
+viz = Visualizer(opt, n_images=5, training_size=len(climate_data_loader.dataset), n_batches = len(climate_data_loader))
 
 for epoch in range(opt.n_epochs):
     img_id = 0
@@ -39,43 +37,19 @@ for epoch in range(opt.n_epochs):
         orog = data['orog'].to(device)
 
         optimizer.zero_grad()
-        recon_x, mu, log_var = edgan_model(fine_pr=fine_pr, coarse_pr=coarse_pr, orog=orog)
-        bce, kld, cycle_loss, loss = edgan_model.loss_function(recon_x, fine_pr, mu, log_var,
+        recon_pr, mu, log_var = edgan_model(fine_pr=fine_pr, coarse_pr=coarse_pr, orog=orog)
+        mse, kld, cycle_loss, loss = edgan_model.loss_function(recon_pr, fine_pr, mu, log_var,
                                                                coarse_pr, cell_area)
         loss.backward()
         train_loss += loss.item()
         optimizer.step()
 
-        # todo add visualizer class
         if batch_idx % opt.log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tBCE Loss: {:.7f}\tKL Loss: {:.7f}\tcycle Loss {:.7f}'
-                  '\tLoss: {:.7f}'.format(
-                    epoch, batch_idx * len(fine_pr), len(climate_data_loader.dataset),
-                    100. * batch_idx / len(climate_data_loader),
-                    bce.item() / len(fine_pr),
-                    kld.item() / len(fine_pr),
-                    cycle_loss.item() / len(fine_pr),
-                    loss.item() / len(fine_pr)))
-                    # todo create logging file
-                    # todo make logging cluster ready
+            viz.print(epoch, batch_idx, mse, kld, cycle_loss, loss)
         if batch_idx % opt.plot_interval == 0:
             img_id += 1
-            image_path = os.path.join('checkpoints', opt.name, 'images')
             image_name = "Epoch{}_Image{}.jpg".format(epoch, img_id)
-            util.mkdir(image_path)
-            n_images = 5
-            fig, axes = plt.subplots(2, n_images, sharex='col', sharey='row')
-            rand_idx = np.random.randint(0, opt.batch_size, n_images)
-            for i in range(n_images):
-                vmin = opt.threshold
-                vmax = 5
-                axes[0, i].imshow(fine_pr[rand_idx[i]].view(8, 8).detach().numpy(), vmin=vmin, vmax=vmax, cmap=plt.get_cmap('jet'))
-                axes[1, i].imshow(recon_x[rand_idx[i]].view(8, 8).detach().numpy(), vmin=vmin, vmax=vmax, cmap=plt.get_cmap('jet'))
-
-            axes[0, 0].set_title('Original Precipitation')
-            axes[1, 0].set_title('Reconstructed Precipitation')
-            fig.savefig(os.path.join(image_path, image_name))
-            plt.close(fig)
+            viz.plot(fine_pr=fine_pr, recon_pr=recon_pr, image_name=image_name)
 
     if epoch % opt.save_interval == 0:
         save_name = "epoch_{}.pth".format(epoch)
