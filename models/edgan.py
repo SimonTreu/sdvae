@@ -11,9 +11,10 @@ class Edgan(nn.Module):
         self.no = opt.no # size of encoded orography
         self.lambda_cycle_l1 = opt.lambda_cycle_l1
         self.input_size = opt.fine_size ** 2
+
         threshold = opt.threshold
         # todo clean up this code a bit
-        hidden_layer_size = opt.fine_size//2 ** 2
+        hidden_layer_size = (opt.fine_size//2) ** 2
 
         # first layer (shared by mu and log_var):
         fc_layer_1 = nn.Linear(self.input_size, hidden_layer_size)
@@ -41,13 +42,14 @@ class Edgan(nn.Module):
                                     nn.Threshold(value=threshold, threshold=threshold)
                                     )
         if self.no > 0:
-            # todo add Norm
             self.encode_orog = nn.Sequential(nn.Conv2d(in_channels=1,out_channels=self.no//2,
                                                        kernel_size=3, padding=1, stride=1),
+                                             nn.BatchNorm2d(self.no//2),
                                              nn.ReLU(),
                                              nn.MaxPool2d(kernel_size=2),
                                              nn.Conv2d(in_channels=self.no//2, out_channels=self.no,
                                                        kernel_size=3, padding=1, stride=1),
+                                             nn.BatchNorm2d(self.no),
                                              nn.ReLU(),
                                              nn.MaxPool2d(kernel_size=4),
                                              )
