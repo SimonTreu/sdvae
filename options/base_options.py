@@ -37,6 +37,8 @@ class BaseOptions:
         self.parser.add_argument('--save_interval', type=int, default=1, help='every _ epoch the model is saved')
         self.parser.add_argument('--d_hidden', type=int, default=4,
                                  help='number of filters in first conv layer ov encoder')
+        self.parser.add_argument('--load_epoch', type=int, default=-1,
+                                 help="if >= 0 load a pretrained model at the defined epoch")
 
     def parse(self):
         opt = self.parser.parse_args()
@@ -56,7 +58,8 @@ class BaseOptions:
         expr_dir = os.path.join('checkpoints', opt.name)
         util.mkdirs(expr_dir)
         file_name = os.path.join(expr_dir, 'opt.txt')
-        with open(file_name, 'wt') as opt_file:
+        write_mode = 'w' if opt.load_epoch < 0 else 'a'
+        with open(file_name, write_mode) as opt_file:
             opt_file.write('------------ Options -------------\n')
             for k, v in sorted(args.items()):
                 if type(v) == bool:

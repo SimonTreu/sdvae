@@ -14,10 +14,11 @@ class Visualizer:
         self.n_batches = n_batches
         self.csv_name = os.path.join('checkpoints', opt.name, 'loss.csv')
         util.mkdir(self.image_path)
-        with open(self.csv_name, "w") as log_csv:
-            csv_writer = csv.writer(log_csv, delimiter= ',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            title =['epoch', 'iters', 'mse', 'kl', 'cycle', 'total']
-            csv_writer.writerow(title)
+        if opt.load_epoch < 0:
+            with open(self.csv_name, "w") as log_csv:
+                csv_writer = csv.writer(log_csv, delimiter= ',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                title =['epoch', 'iters', 'mse', 'kl', 'cycle', 'total']
+                csv_writer.writerow(title)
 
     def plot(self, fine_pr, recon_pr, image_name):
         # todo plot topography

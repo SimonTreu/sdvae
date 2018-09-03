@@ -23,10 +23,18 @@ climate_data_loader = DataLoader(climate_data,
 
 # load the model
 edgan_model = Edgan(opt=opt)
-optimizer = torch.optim.Adam(edgan_model.parameters(), lr=opt.lr)  # TODO which optimizer / lr / lr decay
-viz = Visualizer(opt, n_images=5, training_size=len(climate_data_loader.dataset), n_batches = len(climate_data_loader))
+initial_epoch = 0
+if opt.load_epoch >= 0:
+    save_name = "epoch_{}.pth".format(opt.load_epoch)
+    save_dir = os.path.join(save_root, save_name)
+    edgan_model.load_state_dict(torch.load(save_dir))
+    initial_epoch = opt.load_epoch + 1
 
-for epoch in range(opt.n_epochs):
+optimizer = torch.optim.Adam(edgan_model.parameters(), lr=opt.lr)  # TODO which optimizer / lr / lr decay
+viz = Visualizer(opt, n_images=5, training_size=len(climate_data_loader.dataset), n_batches=len(climate_data_loader))
+
+for epoch_idx in range(opt.n_epochs):
+    epoch = initial_epoch + epoch_idx
     img_id = 0
     train_loss = 0
     edgan_model.train()
@@ -63,7 +71,7 @@ for epoch in range(opt.n_epochs):
           epoch, train_loss / len(climate_data_loader.dataset)))
     # todo print all average losses
 
-save_name = "epoch_{}.final.pth".format(epoch)
+save_name = "epoch_{}.pth".format(epoch)
 save_dir = os.path.join(save_root, save_name)
 if len(opt.gpu_ids) > 0 and torch.cuda.is_available():
     torch.save(edgan_model.module.cpu().state_dict(), save_dir)
