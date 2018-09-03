@@ -39,9 +39,10 @@ class ClimateDataset(Dataset):
         fine_pr = input_sample[0]
 
         # normalize parameters
+        fine_pr.sub_(self.norm_parameters['mean']).div_(self.norm_parameters['std'])
 
         coarse_pr = get_average(fine_pr.contiguous().view(1, -1), cell_area=cell_area.contiguous().view(1, -1))
-        fine_pr.sub_(self.norm_parameters['mean']).div_(self.norm_parameters['std'])
+
 
         return {'fine_pr': fine_pr, 'file_path': sample_path, 'coarse_pr': coarse_pr,
                 'cell_area': cell_area, 'orog':orog}
