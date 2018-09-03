@@ -63,7 +63,7 @@ class Edgan(nn.Module):
         log_var = self.log_var(fine_pr)
         z = self.reparameterize(mu, log_var)
         if self.no > 0:
-            orog.unsqueeze_(1)  # bring into shape (N, n_ch, W, H)
+            orog = orog.unsqueeze(1)  # bring into shape (N, n_ch, W, H)
             o = self.encode_orog(orog)
             return self.decode(torch.cat((z.view(-1, self.nz), coarse_pr, o.view(-1,self.no)), 1).unsqueeze(-1).unsqueeze(-1)), mu.view(-1, self.nz), log_var.view(-1, self.nz)
         else:

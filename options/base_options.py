@@ -55,19 +55,20 @@ class BaseOptions:
         print('-------------- End ----------------')
 
         # save to the disk
-        expr_dir = os.path.join('checkpoints', opt.name)
-        util.mkdirs(expr_dir)
-        file_name = os.path.join(expr_dir, 'opt.txt')
-        write_mode = 'w' if opt.load_epoch < 0 else 'a'
-        with open(file_name, write_mode) as opt_file:
-            opt_file.write('------------ Options -------------\n')
-            for k, v in sorted(args.items()):
-                if type(v) == bool:
-                    if v:
-                        opt_file.write(str(k))
-                else:
-                    opt_file.write('--%s %s\n' % (str(k), str(v)))
-            opt_file.write('-------------- End ----------------\n')
+        if opt.phase == 'train':
+            expr_dir = os.path.join('checkpoints', opt.name)
+            util.mkdirs(expr_dir)
+            file_name = os.path.join(expr_dir, 'opt.txt')
+            write_mode = 'w' if opt.load_epoch < 0 else 'a'
+            with open(file_name, write_mode) as opt_file:
+                opt_file.write('------------ Options -------------\n')
+                for k, v in sorted(args.items()):
+                    if type(v) == bool:
+                        if v:
+                            opt_file.write(str(k))
+                    else:
+                        opt_file.write('--%s %s\n' % (str(k), str(v)))
+                opt_file.write('-------------- End ----------------\n')
 
         # parse gpu_ids
         str_ids = opt.gpu_ids.split(',')
