@@ -2,6 +2,7 @@ from torch.utils.data import Dataset
 import os.path
 import torch
 import random
+import time
 from utils.upscale import get_average
 
 TORCH_EXTENSION = [
@@ -22,6 +23,7 @@ class ClimateDataset(Dataset):
         return len(self.sample_paths)
 
     def __getitem__(self, item):
+        start_time = time.time()
         sample_path = self.sample_paths[item]
         sample = torch.load(sample_path)
 
@@ -42,10 +44,10 @@ class ClimateDataset(Dataset):
         fine_pr.sub_(self.norm_parameters['mean']).div_(self.norm_parameters['std'])
 
         coarse_pr = get_average(fine_pr.contiguous().view(1, -1), cell_area=cell_area.contiguous().view(1, -1))
-
+        end_time = time.time() - start_time
 
         return {'fine_pr': fine_pr, 'file_path': sample_path, 'coarse_pr': coarse_pr,
-                'cell_area': cell_area, 'orog':orog}
+                'cell_area': cell_area, 'orog':orog, 'time':end_time}
 
 
 # Helper Methods

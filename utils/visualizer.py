@@ -37,7 +37,7 @@ class Visualizer:
         fig.savefig(os.path.join(self.image_path, image_name))
         plt.close(fig)
 
-    def print(self, epoch, batch_idx, mse, kld, cycle_loss, loss, iter_time, iter_data_time):
+    def print(self, epoch, batch_idx, mse, kld, cycle_loss, loss, iter_time, iter_data_time, load_time):
         print('Train Epoch: {:<3} [{:<6}/{} ({:<2.0f}%)]{:>10}MSE Loss: {:<10.2f}KL Loss: {:<10.2f}cycle Loss {:<10.2f}'
               'Loss: {:<10.2f}Iteration Time: {:<10.4f}Data Loading Time: {:<10.4f}'.format(
                epoch, batch_idx * self.opt.batch_size, self.training_size,
@@ -58,5 +58,6 @@ class Visualizer:
                    cycle_loss.item() / self.opt.batch_size,
                    loss.item() / self.opt.batch_size,
                    iter_time,
-                   iter_data_time]
+                   iter_data_time,
+                   load_time]
             csv_writer.writerow(row)

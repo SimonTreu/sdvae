@@ -76,7 +76,7 @@ if opt.phase == 'train':
 
             if batch_idx % opt.log_interval == 0:
                 viz.print(epoch, batch_idx, mse, kld, cycle_loss, loss, iter_time,
-                          iter_data_time)
+                          iter_data_time, sum(data['time']).item())
                 iter_data_time = 0
                 iter_time = 0
             if batch_idx % opt.plot_interval == 0:
