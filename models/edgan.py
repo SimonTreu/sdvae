@@ -10,6 +10,7 @@ class Edgan(nn.Module):
         self.nz = opt.nz
         self.no = opt.no # size of encoded orography
         self.lambda_cycle_l1 = opt.lambda_cycle_l1
+        self.lambda_kl = opt.lambda_kl
         self.input_size = opt.fine_size ** 2
 
         d_hidden = opt.d_hidden
@@ -87,7 +88,7 @@ class Edgan(nn.Module):
         # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
         # https://arxiv.org/abs/1312.6114
         # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
-        KLD = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())
+        KLD = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp()) * self.lambda_kl
 
         # cycle loss as mean squared error
         recon_average = get_average(recon_x.view(-1,64), cell_area.contiguous().view(-1, self.input_size))

@@ -33,6 +33,8 @@ class BaseOptions:
         self.parser.add_argument('--lambda_cycle_l1', type=int, default=1000,
                                  help='factor to be multiplied with the reconstruction loss '
                                       '(|coarse(reconstructed fine resolution) - coarse input|)')
+        self.parser.add_argument('--lambda_kl', type=int, default=1,
+                                 help='factor to be multiplied KL loss term')
         self.parser.add_argument('--lr', type=float, default=1e-3, help='learning rate for optimizer')
         self.parser.add_argument('--save_interval', type=int, default=1, help='every _ epoch the model is saved')
         self.parser.add_argument('--d_hidden', type=int, default=4,
