@@ -9,6 +9,7 @@ import os
 from options.base_options import BaseOptions
 import numpy as np
 from scipy.stats import norm
+import time
 
 
 opt = BaseOptions().parse()
@@ -36,17 +37,24 @@ if opt.load_epoch >= 0:
     initial_epoch = opt.load_epoch + 1
 
 if opt.phase == 'train':
-
     # get optimizer
+    edgan_model.train()
     optimizer = torch.optim.Adam(edgan_model.parameters(), lr=opt.lr)  # TODO which optimizer / lr / lr decay
     viz = Visualizer(opt, n_images=5, training_size=len(climate_data_loader.dataset), n_batches=len(climate_data_loader))
 
     for epoch_idx in range(opt.n_epochs):
+        epoch_start_time = time.time()
         epoch = initial_epoch + epoch_idx
         img_id = 0
-        train_loss = 0
-        edgan_model.train()
+        epoch_mse = 0
+        epoch_kld = 0
+        epoch_cycle_loss = 0
+        epoch_loss = 0
+        iter_data_start_time = time.time()
+        iter_data_time = 0
+        iter_time = 0
         for batch_idx, data in enumerate(climate_data_loader, 0):
+            iter_start_time = time.time()
             fine_pr = data['fine_pr'].to(device)
             coarse_pr = data['coarse_pr'].to(device)
             cell_area = data['cell_area'].to(device)
@@ -57,15 +65,25 @@ if opt.phase == 'train':
             mse, kld, cycle_loss, loss = edgan_model.loss_function(recon_pr, fine_pr, mu, log_var,
                                                                    coarse_pr, cell_area)
             loss.backward()
-            train_loss += loss.item()
+
+            epoch_mse += mse.item()
+            epoch_kld += kld.item()
+            epoch_cycle_loss += cycle_loss.item()
+            epoch_loss += loss.item()
             optimizer.step()
+            iter_time += time.time()-iter_start_time
+            iter_data_time += iter_start_time-iter_data_start_time
 
             if batch_idx % opt.log_interval == 0:
-                viz.print(epoch, batch_idx, mse, kld, cycle_loss, loss)
+                viz.print(epoch, batch_idx, mse, kld, cycle_loss, loss, iter_time,
+                          iter_data_time)
+                iter_data_time = 0
+                iter_time = 0
             if batch_idx % opt.plot_interval == 0:
                 img_id += 1
                 image_name = "Epoch{}_Image{}.jpg".format(epoch, img_id)
                 viz.plot(fine_pr=fine_pr, recon_pr=recon_pr, image_name=image_name)
+            iter_data_start_time = time.time()
 
         if epoch % opt.save_interval == 0:
             save_name = "epoch_{}.pth".format(epoch)
@@ -75,9 +93,17 @@ if opt.phase == 'train':
                 edgan_model.cuda(opt.gpu_ids[0])
             else:
                 torch.save(edgan_model.cpu().state_dict(), save_dir)
-        print('====> Epoch: {} Average loss: {:.4f}'.format(
-              epoch, train_loss / len(climate_data_loader.dataset)))
-        # todo print all average losses
+        epoch_time = time.time() - epoch_start_time
+        print('-----------------------------------------------------------------------------------')
+        print('====> Epoch: {}, average MSE: {:.2f}, average KL loss: {:.2f}, '
+              'average cycle loss: {:.2f}, average loss: {:.2f}, calculation time = {:.2f}'.format(
+               epoch,
+               epoch_mse / len(climate_data_loader.dataset),
+               epoch_kld / len(climate_data_loader.dataset),
+               epoch_cycle_loss / len(climate_data_loader.dataset),
+               epoch_loss / len(climate_data_loader.dataset),
+               epoch_time))
+        print('------------------------------------------------------------------------------------')
 
     save_name = "epoch_{}.pth".format(epoch)
     save_dir = os.path.join(save_root, save_name)
