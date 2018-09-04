@@ -17,7 +17,7 @@ class Visualizer:
         if opt.load_epoch < 0:
             with open(self.csv_name, "w") as log_csv:
                 csv_writer = csv.writer(log_csv, delimiter= ',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                title =['epoch', 'iters', 'mse', 'kl', 'cycle', 'total']
+                title =['epoch', 'iters', 'mse', 'kl', 'cycle', 'total', 'iter_time', 'iter_data_time']
                 csv_writer.writerow(title)
 
     def plot(self, fine_pr, recon_pr, image_name):
@@ -49,12 +49,14 @@ class Visualizer:
                loss.item() / self.opt.batch_size,
                iter_time,
                iter_data_time))
-        # csv title: 'epoch', 'iters', 'mse', 'kl', 'cycle', 'total' TODO add time and time_data
+        # csv title: 'epoch', 'iters', 'mse', 'kl', 'cycle', 'total', 'iter_time', 'iter_data_time'
         with open(self.csv_name, "a") as log_csv:
             csv_writer = csv.writer(log_csv, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             row = [epoch, batch_idx,
                    mse.item() / self.opt.batch_size,
                    kld.item() / self.opt.batch_size,
                    cycle_loss.item() / self.opt.batch_size,
-                   loss.item() / self.opt.batch_size]
+                   loss.item() / self.opt.batch_size,
+                   iter_time,
+                   iter_data_time]
             csv_writer.writerow(row)
