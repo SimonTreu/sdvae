@@ -58,17 +58,14 @@ class Edgan(nn.Module):
                                              )
 
     def forward(self, fine_pr, coarse_pr, orog):
-        # todo clean up the formats (.view and .unsqueeze)
-        fine_pr = fine_pr.unsqueeze(1)
         mu = self.mu(fine_pr)
         log_var = self.log_var(fine_pr)
         z = self.reparameterize(mu, log_var)
         if self.no > 0:
-            orog = orog.unsqueeze(1)  # bring into shape (N, n_ch, W, H)
             o = self.encode_orog(orog)
-            return self.decode(torch.cat((z.view(-1, self.nz), coarse_pr, o.view(-1,self.no)), 1).unsqueeze(-1).unsqueeze(-1)), mu.view(-1, self.nz), log_var.view(-1, self.nz)
+            return self.decode(torch.cat((z, coarse_pr, o), 1)), mu.view(-1, self.nz), log_var.view(-1, self.nz)
         else:
-            return self.decode(torch.cat((z.view(-1, self.nz), coarse_pr), 1).unsqueeze(-1).unsqueeze(-1)), mu.view(-1, self.nz), log_var.view(-1, self.nz)
+            return self.decode(torch.cat((z, coarse_pr), 1)), mu.view(-1, self.nz), log_var.view(-1, self.nz)
 
     def reparameterize(self, mu, log_var):
         if self.training:
@@ -81,8 +78,7 @@ class Edgan(nn.Module):
     # todo read if that can be defined somewhere else
     # Reconstruction + KL divergence losses summed over all elements and batch
     def loss_function(self, recon_x, x, mu, log_var, coarse_pr, cell_area):
-        # todo change name of BCE
-        BCE = nn.functional.mse_loss(recon_x, x.unsqueeze(1), size_average=False)
+        MSE = nn.functional.mse_loss(recon_x, x, size_average=False)
 
         # see Appendix B from VAE paper:
         # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
@@ -93,5 +89,6 @@ class Edgan(nn.Module):
         # cycle loss as mean squared error
         recon_average = get_average(recon_x.view(-1,64), cell_area.contiguous().view(-1, self.input_size))
         cycle_loss = torch.mean(coarse_pr.view(-1).sub(recon_average).pow(2)) * self.lambda_cycle_l1
-        return BCE, KLD, cycle_loss, BCE + KLD + cycle_loss
+
+        return MSE, KLD, cycle_loss, MSE + KLD + cycle_loss
 

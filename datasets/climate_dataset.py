@@ -43,8 +43,14 @@ class ClimateDataset(Dataset):
         # normalize parameters
         fine_pr.sub_(self.norm_parameters['mean']).div_(self.norm_parameters['std'])
 
-        coarse_pr = get_average(fine_pr.contiguous().view(1, -1), cell_area=cell_area.contiguous().view(1, -1))
+        coarse_pr = get_average(fine_pr.contiguous().view(1, -1),
+                                cell_area=cell_area.contiguous().view(1, -1)
+                                ).unsqueeze(0).unsqueeze(0)  # Shape [C=1, W=1, H=1]
         end_time = time.time() - start_time
+
+        # bring all into shape [C,W,H] (Channels, With, Height)
+        fine_pr.unsqueeze_(0)
+        orog.unsqueeze_(0)
 
         return {'fine_pr': fine_pr, 'file_path': sample_path, 'coarse_pr': coarse_pr,
                 'cell_area': cell_area, 'orog':orog, 'time':end_time}
