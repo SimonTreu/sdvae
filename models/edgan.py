@@ -34,19 +34,8 @@ class Edgan(nn.Module):
         self.mu = nn.Sequential(*hidden_layer, *mu)
         self.log_var = nn.Sequential(*hidden_layer, *log_var)
 
-        decoder_input_size = self.nz+self.no+1
-        # todo variable number of filters
-        # todo skip connections
-        self.decode = nn.Sequential(nn.ConvTranspose2d(in_channels=decoder_input_size,
-                                                       out_channels=decoder_input_size * 8,
-                                                       kernel_size=4, stride=1, padding=0),
-                                    nn.BatchNorm2d(decoder_input_size * 8),
-                                    nn.ReLU(),
-                                    nn.ConvTranspose2d(in_channels=decoder_input_size*8,
-                                                       out_channels=1, kernel_size=4,
-                                                       stride=2, padding=1),
-                                    nn.Threshold(value=threshold, threshold=threshold)
-                                    )
+        self.decode = Decoder(nz=self.nz, no=self.no, threshold=threshold)
+
         if self.no > 0:
             self.encode_orog = nn.Sequential(nn.Conv2d(in_channels=1,out_channels=self.no*2,
                                                        kernel_size=3, padding=1, stride=1),
@@ -65,7 +54,7 @@ class Edgan(nn.Module):
             o = self.encode_orog(orog)
             return self.decode(torch.cat((z, coarse_pr, o), 1)), mu.view(-1, self.nz), log_var.view(-1, self.nz)
         else:
-            return self.decode(torch.cat((z, coarse_pr), 1)), mu.view(-1, self.nz), log_var.view(-1, self.nz)
+            return self.decode(z, coarse_pr), mu.view(-1, self.nz), log_var.view(-1, self.nz)
 
     def reparameterize(self, mu, log_var):
         if self.training:
@@ -88,7 +77,39 @@ class Edgan(nn.Module):
 
         # cycle loss as mean squared error
         recon_average = get_average(recon_x.view(-1,64), cell_area.contiguous().view(-1, self.input_size))
-        cycle_loss = torch.mean(coarse_pr.view(-1).sub(recon_average).pow(2)) * self.lambda_cycle_l1
+        cycle_loss = torch.sum(torch.abs(coarse_pr.view(-1).sub(recon_average))) * self.lambda_cycle_l1
 
         return MSE, KLD, cycle_loss, MSE + KLD + cycle_loss
 
+
+class Decoder(nn.Module):
+    def __init__(self, nz, no, threshold, hidden_depth=None):
+        super(Decoder, self).__init__()
+        self.nz = nz
+        self.no = no
+
+        decoder_input_size = self.nz+self.no+1
+        if hidden_depth is None:
+            hidden_depth = decoder_input_size * 8
+
+        # todo variable number of filters
+        # todo skip connections
+        # todo add in coarse pr. at several points
+
+        self.layer1 = nn.Sequential(nn.ConvTranspose2d(in_channels=decoder_input_size,
+                                                       out_channels=hidden_depth,
+                                                       kernel_size=4, stride=1, padding=0),
+                                    nn.ReLU())
+        self.layer2 = nn.Sequential(nn.ConvTranspose2d(in_channels=hidden_depth + 1,
+                                                       out_channels=1, kernel_size=4,
+                                                       stride=2, padding=1),
+                                    nn.Threshold(value=threshold, threshold=threshold)
+                                    )
+
+    def forward(self, z, coarse_pr):
+        hidden_state = self.layer1(torch.cat((z, coarse_pr), 1))
+        return self.layer2(torch.cat((hidden_state,
+                                      coarse_pr.expand(-1, -1, hidden_state.shape[-2],
+                                                       hidden_state.shape[-1]))
+                                     , 1)
+                           )
