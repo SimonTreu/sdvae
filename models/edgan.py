@@ -52,7 +52,7 @@ class Edgan(nn.Module):
         z = self.reparameterize(mu, log_var)
         if self.no > 0:
             o = self.encode_orog(orog)
-            return self.decode(torch.cat((z, coarse_pr, o), 1)), mu.view(-1, self.nz), log_var.view(-1, self.nz)
+            return self.decode(z, coarse_pr, o), mu.view(-1, self.nz), log_var.view(-1, self.nz)
         else:
             return self.decode(z, coarse_pr), mu.view(-1, self.nz), log_var.view(-1, self.nz)
 
@@ -106,8 +106,11 @@ class Decoder(nn.Module):
                                     nn.Threshold(value=threshold, threshold=threshold)
                                     )
 
-    def forward(self, z, coarse_pr):
-        hidden_state = self.layer1(torch.cat((z, coarse_pr), 1))
+    def forward(self, z, coarse_pr, o=None):
+        if o is None:
+            hidden_state = self.layer1(torch.cat((z, coarse_pr), 1))
+        else:
+            hidden_state = self.layer1(torch.cat((z, coarse_pr, o), 1))
         return self.layer2(torch.cat((hidden_state,
                                       coarse_pr.expand(-1, -1, hidden_state.shape[-2],
                                                        hidden_state.shape[-1]))

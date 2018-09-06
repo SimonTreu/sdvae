@@ -4,6 +4,8 @@ from datasets.climate_dataset import ClimateDataset
 from torch.utils.data import DataLoader
 from models.edgan import Edgan
 from utils.visualizer import Visualizer
+from utils.upscale import get_average
+
 import torch
 import os
 from options.base_options import BaseOptions
@@ -125,9 +127,11 @@ else:
         if opt.no > 0:
             o = generator.encode_orog(orog)
             x_decoded = generator.decode(torch.cat((z, o.view(-1, opt.no)), 1).unsqueeze(-1).unsqueeze(-1))
+            # todo fix here
         else:
-            x_decoded = generator.decode(z.unsqueeze(-1).unsqueeze(-1))
-        return x_decoded.view(8, 8).detach().numpy()
+            x_decoded = generator.decode(z=z[:, :-1].unsqueeze(-1).unsqueeze(-1),
+                                         coarse_pr=z[:,-1:].unsqueeze(-1).unsqueeze(-1))
+        return x_decoded.view(8, 8)
 
     fig2, ax = plt.subplots()
     offset = 0.05 * (opt.nz + 1)
@@ -137,7 +141,7 @@ else:
     z = [0.5 for i in range(opt.nz + 1)]
 
     im = get_picture(np.array([z]), generator=edgan_model)
-    img_in_plot = plt.imshow(im, origin='lower', cmap='viridis', vmin=vmin, vmax=vmax)
+    img_in_plot = plt.imshow(im.detach().numpy(), origin='lower', cmap='viridis', vmin=vmin, vmax=vmax)
     # position of the slider
     z_axis = [plt.axes([0.25, 0.05 + i_offset, 0.65, 0.03]) for i_offset in np.arange(offset, 0.0, -0.05)]
     z_sliders = [Slider(z_axis[i], 'Z {}'.format(i), 0, 1, valinit=z[i]) for i in range(opt.nz)]
@@ -149,8 +153,9 @@ else:
             z[i] = z_sliders[i].val
         z[:-1] = norm.ppf(z[:-1])
         im = get_picture(np.array([z]), generator=edgan_model)
-        img_in_plot.set_data(im)
+        img_in_plot.set_data(im.detach().numpy())
         fig2.canvas.draw_idle()
+        fig2.suptitle('{}, {}'.format(z[-1], torch.mean(im).item()))
         plt.draw()
 
 
@@ -159,3 +164,5 @@ else:
 
     fig2.show()
     plt.show()
+
+# TODO normalize all input data with the area weights
