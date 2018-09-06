@@ -116,46 +116,51 @@ if opt.phase == 'train':
         torch.save(edgan_model.cpu().state_dict(), save_dir)
 else:
     vmin = opt.threshold
-    vmax = 6
+    vmax = 7
+
     # plotting
-    def get_picture(z_sample, generator, orog=None):
-        # todo fix all the formatting stuff (unsqueeze and .view)
+    def get_picture(coarse_pr, generator, z=None, orog=None):
         if orog is None:
             orog = torch.ones(1, 1,  opt.fine_size, opt.fine_size) * opt.threshold
-        # z_sample=norm.ppf(z_sample)
-        z = torch.Tensor(z_sample)
+
+        if z is None:
+            z = torch.randn(coarse_pr.shape[0], opt.nz, 1, 1)
+
         if opt.no > 0:
             o = generator.encode_orog(orog)
             x_decoded = generator.decode(torch.cat((z, o.view(-1, opt.no)), 1).unsqueeze(-1).unsqueeze(-1))
             # todo fix here
         else:
-            x_decoded = generator.decode(z=z[:, :-1].unsqueeze(-1).unsqueeze(-1),
-                                         coarse_pr=z[:,-1:].unsqueeze(-1).unsqueeze(-1))
-        return x_decoded.view(8, 8)
+            x_decoded = generator.decode(z=z, coarse_pr=coarse_pr)
+        if coarse_pr.shape[0] == 1:
+            return x_decoded.view(8, 8)
+        else:
+            return x_decoded
 
     fig2, ax = plt.subplots()
     offset = 0.05 * (opt.nz + 1)
     plt.subplots_adjust(bottom=0.15 + offset)
 
     # initial values
-    z = [0.5 for i in range(opt.nz + 1)]
+    z = torch.ones(1, opt.nz, 1, 1) * 0.5
+    coarse_pr = torch.ones(1, 1, 1, 1) * 0.5
 
-    im = get_picture(np.array([z]), generator=edgan_model)
-    img_in_plot = plt.imshow(im.detach().numpy(), origin='lower', cmap='viridis', vmin=vmin, vmax=vmax)
+    im = get_picture(z=torch.Tensor(norm.ppf(z)), coarse_pr=coarse_pr, generator=edgan_model)
+    img_in_plot = plt.imshow(im.detach().numpy(), origin='lower', cmap=plt.get_cmap('jet'), vmin=vmin, vmax=vmax)
     # position of the slider
     z_axis = [plt.axes([0.25, 0.05 + i_offset, 0.65, 0.03]) for i_offset in np.arange(offset, 0.0, -0.05)]
-    z_sliders = [Slider(z_axis[i], 'Z {}'.format(i), 0, 1, valinit=z[i]) for i in range(opt.nz)]
-    z_sliders.append(Slider(z_axis[opt.nz], 'Coarse Pr', opt.threshold, 10, valinit=z[opt.nz]))
+    z_sliders = [Slider(z_axis[i], 'Z {}'.format(i), 0, 1, valinit=z[0, i, 0, 0].item()) for i in range(opt.nz)]
+    z_sliders.append(Slider(z_axis[opt.nz], 'Coarse Pr', opt.threshold, 10, valinit=coarse_pr))
 
 
     def update(val):
-        for i in range(opt.nz + 1):
-            z[i] = z_sliders[i].val
-        z[:-1] = norm.ppf(z[:-1])
-        im = get_picture(np.array([z]), generator=edgan_model)
+        for i in range(opt.nz):
+            z[0, i, 0, 0] = z_sliders[i].val
+        coarse_pr[0, 0, 0, 0] = z_sliders[-1].val
+        im = get_picture(z=torch.Tensor(norm.ppf(z)), coarse_pr=coarse_pr, generator=edgan_model)
         img_in_plot.set_data(im.detach().numpy())
         fig2.canvas.draw_idle()
-        fig2.suptitle('{}, {}'.format(z[-1], torch.mean(im).item()))
+        fig2.suptitle('{}, {}'.format(coarse_pr.item(), torch.mean(im).item()))
         plt.draw()
 
 
@@ -165,4 +170,19 @@ else:
     fig2.show()
     plt.show()
 
+    all_fine_pr = None
+    all_recon_pr = None
+    for batch_idx, data in enumerate(climate_data_loader, 0):
+        fine_pr = data['fine_pr'].to(device)
+        coarse_pr = data['coarse_pr'].to(device)
+        cell_area = data['cell_area'].to(device)
+        orog = data['orog'].to(device)
+        if not(all_fine_pr is None):
+            all_fine_pr = torch.cat((all_fine_pr, fine_pr), 0)
+            all_recon_pr = torch.cat((all_recon_pr, get_picture(coarse_pr=coarse_pr, generator=edgan_model)), 0)
+        else:
+            all_fine_pr = fine_pr
+            all_recon_pr = get_picture(coarse_pr=coarse_pr, generator=edgan_model)
+
+    pass
 # TODO normalize all input data with the area weights
