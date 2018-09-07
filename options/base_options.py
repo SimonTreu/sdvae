@@ -39,6 +39,8 @@ class BaseOptions:
         self.parser.add_argument('--save_interval', type=int, default=1, help='every _ epoch the model is saved')
         self.parser.add_argument('--d_hidden', type=int, default=4,
                                  help='number of filters in first conv layer ov encoder')
+        self.parser.add_argument('--decoder_hidden_depth', type=int, default=16,
+                                 help='number of filters in first conv layer ov encoder')
         self.parser.add_argument('--load_epoch', type=int, default=-1,
                                  help="if >= 0 load a pretrained model at the defined epoch")
 
