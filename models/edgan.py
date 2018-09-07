@@ -45,6 +45,13 @@ class Edgan(nn.Module):
                                              nn.Conv2d(in_channels=self.no*2, out_channels=self.no,
                                                        kernel_size=4, padding=0, stride=1)
                                              )
+            self.encode_orog_2 = nn.Sequential(nn.Conv2d(in_channels=1, out_channels=self.no * 2,
+                                    kernel_size=3, padding=1, stride=1),
+                          nn.BatchNorm2d(self.no * 2),
+                          nn.ReLU(),
+                          nn.Conv2d(in_channels=self.no * 2, out_channels=self.no,
+                                    kernel_size=3, padding=1, stride=2)
+                          )
 
     def forward(self, fine_pr, coarse_pr, orog):
         mu = self.mu(fine_pr)
@@ -52,7 +59,8 @@ class Edgan(nn.Module):
         z = self.reparameterize(mu, log_var)
         if self.no > 0:
             o = self.encode_orog(orog)
-            return self.decode(z, coarse_pr, o), mu.view(-1, self.nz), log_var.view(-1, self.nz)
+            o2 = self.encode_orog_2(orog)
+            return self.decode(z, coarse_pr, o, o2), mu.view(-1, self.nz), log_var.view(-1, self.nz)
         else:
             return self.decode(z, coarse_pr), mu.view(-1, self.nz), log_var.view(-1, self.nz)
 
@@ -100,19 +108,20 @@ class Decoder(nn.Module):
                                                        out_channels=hidden_depth,
                                                        kernel_size=4, stride=1, padding=0),
                                     nn.ReLU())
-        self.layer2 = nn.Sequential(nn.ConvTranspose2d(in_channels=hidden_depth + 1,
+        self.layer2 = nn.Sequential(nn.ConvTranspose2d(in_channels=hidden_depth + 1 +self.no,
                                                        out_channels=1, kernel_size=4,
                                                        stride=2, padding=1),
                                     nn.Threshold(value=threshold, threshold=threshold)
                                     )
 
-    def forward(self, z, coarse_pr, o=None):
+    def forward(self, z, coarse_pr, o=None, o2=None):
         if o is None:
             hidden_state = self.layer1(torch.cat((z, coarse_pr), 1))
         else:
             hidden_state = self.layer1(torch.cat((z, coarse_pr, o), 1))
         return self.layer2(torch.cat((hidden_state,
-                                      coarse_pr.expand(-1, -1, hidden_state.shape[-2],
-                                                       hidden_state.shape[-1]))
+                                      coarse_pr.expand(-1, -1, hidden_state.shape[-2], hidden_state.shape[-1]),
+                                      o2
+                                      )
                                      , 1)
                            )
