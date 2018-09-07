@@ -92,6 +92,7 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         self.nz = nz
         self.no = no
+        self.hidden_depth = hidden_depth
 
         decoder_input_size = self.nz+self.no+1
 
@@ -102,15 +103,22 @@ class Decoder(nn.Module):
                                                        kernel_size=4, stride=1, padding=0),
                                     nn.ReLU())
         self.layer2 = nn.Sequential(nn.ConvTranspose2d(in_channels=hidden_depth + 1 +self.no,
-                                                       out_channels=1, kernel_size=4,
+                                                       out_channels=hidden_depth * 2, kernel_size=4,
                                                        stride=2, padding=1),
+                                    nn.ReLU())
+        self.layer3 = nn.Sequential(nn.Conv2d(in_channels=hidden_depth * 2, out_channels=hidden_depth,
+                                              kernel_size=3, stride=1, padding=1),
                                     nn.Threshold(value=threshold, threshold=threshold))
+        self.linear_layer = nn.Sequential(nn.Linear(in_features=64*hidden_depth, out_features=64))
 
     def forward(self, z, coarse_pr, o=None, o2=None):
         if o is None:
             hidden_state = self.layer1(torch.cat((z, coarse_pr), 1))
         else:
             hidden_state = self.layer1(torch.cat((z, coarse_pr, o), 1))
-        return self.layer2(torch.cat((hidden_state,
-                                      coarse_pr.expand(-1, -1, hidden_state.shape[-2], hidden_state.shape[-1]),
-                                      o2), 1))
+            hidden_state2 = self.layer2(torch.cat((hidden_state,
+                                        coarse_pr.expand(-1, -1, hidden_state.shape[-2], hidden_state.shape[-1]),
+                                        o2), 1))
+            hidden_state3 = self.layer3(hidden_state2)
+
+        return self.linear_layer(hidden_state3.view(-1,64*self.hidden_depth)).view(-1,1,8,8)
