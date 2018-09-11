@@ -3,6 +3,10 @@ import os.path
 import numpy as np
 from utils import util
 import csv
+import torch
+from scipy.stats import norm
+from matplotlib.widgets import Slider, Button
+
 
 
 class Visualizer:
@@ -60,3 +64,67 @@ class Visualizer:
                    iter_data_time,
                    load_time]
             csv_writer.writerow(row)
+
+
+class ValidationViz:
+    def __init__(self, opt):
+        self.nz = opt.nz
+        self.no = opt.no
+        self.threshold = opt.threshold
+        self.vmin = opt.threshold
+        self.vmax = 7
+
+    def plot_latent_walker(self, edgan_model, climate_data):
+        fig2, ax = plt.subplots()
+        offset = 0.05 * (self.nz + 1)
+        plt.subplots_adjust(bottom=0.15 + offset)
+
+        # initial values
+        z = torch.ones(1, self.nz, 1, 1) * 0.5
+        coarse_pr = torch.ones(1, 1, 1, 1) * 0.5
+
+        r = np.random.randint(len(climate_data))
+        self.orog = climate_data[r]['orog'].unsqueeze(0)
+
+        im = edgan_model.get_picture(latent=torch.Tensor(norm.ppf(z)), coarse_precipitation=coarse_pr,
+                                     orog=self.orog)
+        img_in_plot = plt.imshow(im.detach().numpy(), origin='lower',
+                                 cmap=plt.get_cmap('jet'), vmin=self.vmin, vmax=self.vmax)
+        self.orog_in_plot = plt.contour(self.orog.view(8, 8))
+        # position of the slider
+        z_axis = [plt.axes([0.25, 0.05 + i_offset, 0.65, 0.03]) for i_offset in np.arange(offset, 0.0, -0.05)]
+        z_sliders = [Slider(z_axis[i], 'Z {}'.format(i), 0, 1, valinit=z[0, i, 0, 0].item()) for i in range(self.nz)]
+        z_sliders.append(Slider(z_axis[self.nz], 'Coarse Pr', self.threshold, 10, valinit=coarse_pr))
+
+        def update(val):
+            for i in range(self.nz):
+                z[0, i, 0, 0] = z_sliders[i].val
+            coarse_pr[0, 0, 0, 0] = z_sliders[-1].val
+            im = edgan_model.get_picture(latent=torch.Tensor(norm.ppf(z)), coarse_precipitation=coarse_pr, orog=self.orog)
+            img_in_plot.set_data(im.detach().numpy())
+            fig2.canvas.draw_idle()
+            fig2.suptitle('{}, {}'.format(coarse_pr.item(), torch.mean(im).item()))
+            plt.draw()
+
+        def update_orog(val):
+            if self.no > 0:
+                r = np.random.randint(len(climate_data))
+                self.orog = climate_data[r]['orog'].unsqueeze(0)
+            im = edgan_model.get_picture(latent=torch.Tensor(norm.ppf(z)), coarse_precipitation=coarse_pr, orog=self.orog)
+            img_in_plot.set_data(im.detach().numpy())
+            for coll in self.orog_in_plot.collections:
+                coll.remove()
+            self.orog_in_plot = ax.contour(self.orog.view(8, 8))
+            fig2.canvas.draw_idle()
+            fig2.suptitle('{}, {}'.format(coarse_pr.item(), torch.mean(im).item()))
+            plt.draw()
+
+        for z_slider in z_sliders:
+            z_slider.on_changed(update)
+
+        ax_button = plt.axes([0.81, 0.0, 0.1, 0.075])
+        b_orog = Button(ax_button, 'Orog')
+        b_orog.on_clicked(update_orog)
+
+        fig2.show()
+        plt.show()
