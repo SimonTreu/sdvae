@@ -13,23 +13,25 @@ class ValObj:
         self.min = min
         self.max = max
         self.bins = np.arange(self.min, self.max, 0.005)
+        self.density = True
+        self.cumulative = True
 
     def set_bins(self):
         self.bins = np.arange(self.min, self.max, 0.005)
 
-
-    def plot_hist(self, i, j):
-        plots = []
-        plots.append(plt.hist(self.recon_pr[:, 0, i, j].detach().numpy(), bins=self.bins, histtype='step', cumulative=True,
-                 density=True,
-                 label='recon_pr'))
-        plots.append(plt.hist(self.fine_pr[:, 0, i, j].detach().numpy(), bins=self.bins, histtype='step', cumulative=True,
-                 density=True,
-                 label='fine_pr'))
-        plots.append(plt.hist(self.coarse_pr[:, 0, 0, 0].detach().numpy(), bins=self.bins, histtype='step', cumulative=True,
-                 label='coarse_pr', density=True))
-        plt.legend()
-        return plots
+    def plot_hist(self,ax, i, j):
+        ax.hist(self.recon_pr[:, 0, i, j].detach().numpy(), bins=self.bins, histtype='step',
+                cumulative=self.cumulative,
+                density=self.density,
+                label='recon_pr')
+        ax.hist(self.fine_pr[:, 0, i, j].detach().numpy(), bins=self.bins, histtype='step',
+                cumulative=self.cumulative,
+                density=self.density,
+                label='fine_pr')
+        ax.hist(self.coarse_pr[:, 0, 0, 0].detach().numpy(), bins=self.bins, histtype='step',
+                cumulative=self.cumulative,
+                label='coarse_pr', density=self.density)
+        ax.legend()
 
     def evaluate_distribution(self):
         fig2, ax = plt.subplots()
@@ -38,17 +40,7 @@ class ValObj:
         offset = 5*n_sliders/100
         plt.subplots_adjust(bottom=0.15 + offset)
         # Plot with initial slider postition
-        #recon
-        recon_plt = plt.hist(self.recon_pr[:, 0, 3, 3].detach().numpy(), bins=self.bins, histtype='step', cumulative=True,
-                 density=True,
-                 label='recon_pr')
-        #fine
-        fine_plt = plt.hist(self.fine_pr[:, 0, 3, 3].detach().numpy(), bins=self.bins, histtype='step', cumulative=True,
-                 density=True,
-                 label='fine_pr')
-        #coarse
-        plt.hist(self.coarse_pr[:, 0, 0, 0].detach().numpy(), bins=self.bins, histtype='step', cumulative=True,
-                 label='coarse_pr', density=True)
+        self.plot_hist(ax, 3, 3)
 
         # Create Sliders
         ij_axis = [plt.axes([0.25, 0.05 + i_offset, 0.65, 0.03]) for i_offset in np.arange(offset, 0.0, -0.05)]
@@ -60,14 +52,7 @@ class ValObj:
             ax.cla()
             i = int(ij_sliders[0].val)
             j = int(ij_sliders[1].val)
-            ax.hist(self.recon_pr[:, 0, i, j].detach().numpy(), bins=self.bins, histtype='step', cumulative=True,
-                    density=True,
-                    label='recon_pr')
-            ax.hist(self.fine_pr[:, 0, i, j].detach().numpy(), bins=self.bins, histtype='step', cumulative=True,
-                    density=True,
-                    label='recon_pr')
-
-            ax.legend()
+            self.plot_hist(ax, i, j)
             fig2.canvas.draw_idle()
             plt.draw()
 
