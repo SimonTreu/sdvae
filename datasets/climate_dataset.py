@@ -39,6 +39,8 @@ class ClimateDataset(Dataset):
         orog = input_sample[-2]
         # todo add wind
         fine_pr = input_sample[0]
+        fine_uas = input_sample[1]
+        fine_vas = input_sample[2]
 
         # normalize parameters
         fine_pr.sub_(self.norm_parameters['mean']).div_(self.norm_parameters['std'])
@@ -46,6 +48,13 @@ class ClimateDataset(Dataset):
         coarse_pr = get_average(fine_pr.contiguous().view(1, -1),
                                 cell_area=cell_area.contiguous().view(1, -1)
                                 ).unsqueeze(0).unsqueeze(0)  # Shape [C=1, W=1, H=1]
+        uas = get_average(fine_uas.contiguous().view(1, -1),
+                          cell_area=cell_area.contiguous().view(1, -1)
+                          ).unsqueeze(0).unsqueeze(0)
+        vas = get_average(fine_vas.contiguous().view(1, -1),
+                          cell_area=cell_area.contiguous().view(1, -1)
+                          ).unsqueeze(0).unsqueeze(0)
+
         end_time = time.time() - start_time
 
         # bring all into shape [C,W,H] (Channels, With, Height)
@@ -53,7 +62,7 @@ class ClimateDataset(Dataset):
         orog.unsqueeze_(0)
 
         return {'fine_pr': fine_pr, 'file_path': sample_path, 'coarse_pr': coarse_pr,
-                'cell_area': cell_area, 'orog':orog, 'time':end_time}
+                'cell_area': cell_area, 'orog': orog, 'uas': uas, 'vas': vas, 'time': end_time}
 
 
 # Helper Methods
