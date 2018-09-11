@@ -73,6 +73,20 @@ class Edgan(nn.Module):
         else:
             return mu
 
+    def get_picture(self, coarse_precipitation, latent=None, orog=None):
+        if latent is None:
+            latent = torch.randn(coarse_precipitation.shape[0], self.nz, 1, 1)
+        if self.no > 0:
+            o = self.encode_orog(orog)
+            o2 = self.encode_orog_2(orog)
+            x_decoded = self.decode(z=latent, o=o, o2=o2, coarse_pr=coarse_precipitation)
+        else:
+            x_decoded = self.decode(z=latent, coarse_pr=coarse_precipitation)
+        if coarse_precipitation.shape[0] == 1:
+            return x_decoded.detach().view(8, 8)
+        else:
+            return x_decoded.detach()
+
     def loss_function(self, recon_x, x, mu, log_var, coarse_pr, cell_area):
         mse = nn.functional.mse_loss(recon_x, x, size_average=False)
         # see Appendix B from VAE paper:
