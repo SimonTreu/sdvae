@@ -43,7 +43,9 @@ class ClimateDataset(Dataset):
         fine_vas = input_sample[2]
 
         # normalize parameters
-        fine_pr.sub_(self.norm_parameters['mean']).div_(self.norm_parameters['std'])
+        # todo Normalize wind
+        fine_pr.sub_(self.norm_parameters['mean_pr']).div_(self.norm_parameters['std_pr'])
+        orog.sub_(self.norm_parameters['mean_orog']).div_(self.norm_parameters['std_orog'])
 
         coarse_pr = get_average(fine_pr.contiguous().view(1, -1),
                                 cell_area=cell_area.contiguous().view(1, -1)

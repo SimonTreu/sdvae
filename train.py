@@ -113,3 +113,6 @@ if opt.phase == 'train':
 
     pass
 # TODO normalize all input data with the area weights
+
+# TODO input log(pr + 1) normalized
+# TODO what normalization for orog

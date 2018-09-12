@@ -98,12 +98,16 @@ class BaseOptions:
 
         # load normalization values
         with Dataset(os.path.join(opt.dataroot, "stats", "mean.nc4"), "r", format="NETCDF4") as rootgrp:
-            mean = float(rootgrp.variables['pr'][:])
+            mean_pr = float(rootgrp.variables['pr'][:])
+            mean_orog = float(rootgrp.variables['orog'][:])
 
         with Dataset(os.path.join(opt.dataroot, "stats", "std.nc4"), "r", format="NETCDF4") as rootgrp:
-            std = float(rootgrp.variables['pr'][:])
+            std_pr = float(rootgrp.variables['pr'][:])
+            std_orog = float(rootgrp.variables['orog'][:])
 
-        opt.mean_std = {'mean': mean, 'std': std}
-        opt.threshold = (0 - opt.mean_std['mean']) / opt.mean_std['std']
+        opt.mean_std = {'mean_pr': mean_pr, 'std_pr': std_pr,
+                        'mean_orog': mean_orog, 'std_orog': std_orog}
+
+        opt.threshold = (0 - opt.mean_std['mean_pr']) / opt.mean_std['std_pr']
 
         return opt
