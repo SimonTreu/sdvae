@@ -100,16 +100,9 @@ if opt.phase == 'train':
             else:
                 torch.save(edgan_model.cpu().state_dict(), save_dir)
         epoch_time = time.time() - epoch_start_time
-        print('-----------------------------------------------------------------------------------')
-        print('====> Epoch: {}, average MSE: {:.2f}, average KL loss: {:.2f}, '
-              'average cycle loss: {:.2f}, average loss: {:.2f}, calculation time = {:.2f}'.format(
-               epoch,
-               epoch_mse / len(climate_data_loader.dataset),
-               epoch_kld / len(climate_data_loader.dataset),
-               epoch_cycle_loss / len(climate_data_loader.dataset),
-               epoch_loss / len(climate_data_loader.dataset),
-               epoch_time))
-        print('------------------------------------------------------------------------------------')
+        viz.print_epoch(epoch=epoch, epoch_mse=epoch_mse,
+                        epoch_kld=epoch_kld, epoch_cycle_loss=epoch_cycle_loss,
+                        epoch_loss=epoch_loss, epoch_time=epoch_time)
 
     save_name = "epoch_{}.pth".format(epoch)
     save_dir = os.path.join(save_root, save_name)
@@ -119,9 +112,8 @@ if opt.phase == 'train':
     else:
         torch.save(edgan_model.cpu().state_dict(), save_dir)
 
-
-    pass
 # TODO normalize all input data with the area weights
-
 # TODO input log(pr + 1) normalized
 # TODO what normalization for orog
+# TODO compare MSE of validation set
+

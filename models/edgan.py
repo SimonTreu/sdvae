@@ -144,7 +144,11 @@ class Decoder(nn.Module):
                                                        out_channels=hidden_depth * 2, kernel_size=4,
                                                        stride=2, padding=1),
                                     nn.ReLU())
-        self.layer3 = nn.Sequential(nn.Conv2d(in_channels=hidden_depth * 2, out_channels=1,
+        self.layer3 = nn.Sequential(nn.Conv2d(in_channels=hidden_depth * 2+1, out_channels=hidden_depth * 4,
+                                              kernel_size=3, stride=1, padding=1),
+                                    nn.ReLU())
+
+        self.layer4 = nn.Sequential(nn.Conv2d(in_channels=hidden_depth * 4, out_channels=1,
                                               kernel_size=3, stride=1, padding=1),
                                     nn.Threshold(value=threshold, threshold=threshold))
 
@@ -176,5 +180,10 @@ class Decoder(nn.Module):
                                                   coarse_l, coarse_r,
                                                   coarse_bl, coarse_b, coarse_br]],
                                         o2), 1))
-        hidden_state3 = self.layer3(hidden_state2)
-        return hidden_state3
+        hidden_state3 = self.layer3(torch.cat((hidden_state2,
+                                               coarse_pr.expand(-1, -1, hidden_state2.shape[-2],
+                                                                hidden_state2.shape[-1])),
+                                              1))
+        hidden_state4 = self.layer4(hidden_state3)
+
+        return hidden_state4

@@ -8,7 +8,6 @@ from scipy.stats import norm
 from matplotlib.widgets import Slider, Button
 
 
-
 class Visualizer:
     def __init__(self, opt, n_images, training_size, n_batches):
         self.opt = opt
@@ -17,11 +16,22 @@ class Visualizer:
         self.training_size = training_size
         self.n_batches = n_batches
         self.csv_name = os.path.join('checkpoints', opt.name, 'loss.csv')
+        #epoch,
+          #         epoch_mse / self.training_size,
+          #         epoch_kld / self.training_size,
+          #         epoch_cycle_loss / self.training_size,
+          #         epoch_loss / self.training_size,
+          #         epoch_time
+        self.csv_epoch_name = os.path.join('checkpoints', opt.name, 'loss_epoch.csv')
         util.mkdir(self.image_path)
         if opt.load_epoch < 0:
             with open(self.csv_name, "w") as log_csv:
                 csv_writer = csv.writer(log_csv, delimiter= ',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                 title =['epoch', 'iters', 'mse', 'kl', 'cycle', 'total', 'iter_time', 'iter_data_time']
+                csv_writer.writerow(title)
+            with open(self.csv_epoch_name, "w") as log_csv:
+                csv_writer = csv.writer(log_csv, delimiter= ',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                title =['epoch', 'mse', 'kl', 'cycle', 'total', 'epoch_time']
                 csv_writer.writerow(title)
 
     def plot(self, fine_pr, recon_pr, image_name):
@@ -63,6 +73,28 @@ class Visualizer:
                    iter_time,
                    iter_data_time,
                    load_time]
+            csv_writer.writerow(row)
+
+    def print_epoch(self, epoch, epoch_mse, epoch_kld, epoch_cycle_loss, epoch_loss, epoch_time):
+        print('-----------------------------------------------------------------------------------')
+        print('====> Epoch: {}, average MSE: {:.2f}, average KL loss: {:.2f}, '
+              'average cycle loss: {:.2f}, average loss: {:.2f}, calculation time = {:.2f}'.format(
+            epoch,
+            epoch_mse / self.training_size,
+            epoch_kld / self.training_size,
+            epoch_cycle_loss / self.training_size,
+            epoch_loss / self.training_size,
+            epoch_time))
+        print('------------------------------------------------------------------------------------')
+
+        with open(self.csv_epoch_name, "a") as log_csv:
+            csv_writer = csv.writer(log_csv, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            row = [epoch,
+                   epoch_mse / self.training_size,
+                   epoch_kld / self.training_size,
+                   epoch_cycle_loss / self.training_size,
+                   epoch_loss / self.training_size,
+                   epoch_time]
             csv_writer.writerow(row)
 
 
