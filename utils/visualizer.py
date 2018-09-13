@@ -75,8 +75,8 @@ class ValidationViz:
         self.vmax = 7
 
     def plot_latent_walker(self, edgan_model, climate_data):
-        fig2, ax = plt.subplots()
-        offset = 0.05 * (self.nz + 1)
+        fig2, ax = plt.subplots(figsize=(50,50))
+        offset = 0.025 * (self.nz + 9)
         plt.subplots_adjust(bottom=0.15 + offset)
 
         # initial values
@@ -87,20 +87,35 @@ class ValidationViz:
         self.orog = climate_data[r]['orog'].unsqueeze(0)
 
         im = edgan_model.get_picture(latent=torch.Tensor(norm.ppf(z)), coarse_precipitation=coarse_pr,
+                                     coarse_ul=coarse_pr, coarse_u=coarse_pr, coarse_ur=coarse_pr,
+                                     coarse_l=coarse_pr, coarse_r=coarse_pr,
+                                     coarse_bl=coarse_pr, coarse_b=coarse_pr,coarse_br=coarse_pr,
                                      orog=self.orog)
         img_in_plot = plt.imshow(im.detach().numpy(), origin='lower',
                                  cmap=plt.get_cmap('jet'), vmin=self.vmin, vmax=self.vmax)
         self.orog_in_plot = plt.contour(self.orog.view(8, 8))
         # position of the slider
-        z_axis = [plt.axes([0.25, 0.05 + i_offset, 0.65, 0.03]) for i_offset in np.arange(offset, 0.0, -0.05)]
+        z_axis = [plt.axes([0.25, 0.05 + i_offset, 0.65, 0.03]) for i_offset in np.arange(offset, 0.0, -0.025)]
         z_sliders = [Slider(z_axis[i], 'Z {}'.format(i), 0, 1, valinit=z[0, i, 0, 0].item()) for i in range(self.nz)]
         z_sliders.append(Slider(z_axis[self.nz], 'Coarse Pr', self.threshold, 10, valinit=coarse_pr))
+        z_sliders += [Slider(z_axis[i], ['ul', 'u', 'ur', 'l', 'r', 'bl', 'b', 'br'][i-self.nz-1],
+                                 self.threshold, 10, valinit=coarse_pr) for i in range(self.nz+1, self.nz+9)]
+
 
         def update(val):
             for i in range(self.nz):
                 z[0, i, 0, 0] = z_sliders[i].val
-            coarse_pr[0, 0, 0, 0] = z_sliders[-1].val
-            im = edgan_model.get_picture(latent=torch.Tensor(norm.ppf(z)), coarse_precipitation=coarse_pr, orog=self.orog)
+            coarse_pr[0, 0, 0, 0] = z_sliders[self.nz].val
+            im = edgan_model.get_picture(latent=torch.Tensor(norm.ppf(z)), coarse_precipitation=coarse_pr,
+                                         coarse_ul=torch.ones(1, 1, 1, 1) * z_sliders[self.nz+1].val,
+                                         coarse_u=torch.ones(1, 1, 1, 1) * z_sliders[self.nz+2].val,
+                                         coarse_ur=torch.ones(1, 1, 1, 1) * z_sliders[self.nz+3].val,
+                                         coarse_l=torch.ones(1, 1, 1, 1) * z_sliders[self.nz+4].val,
+                                         coarse_r=torch.ones(1, 1, 1, 1) * z_sliders[self.nz+5].val,
+                                         coarse_bl=torch.ones(1, 1, 1, 1) * z_sliders[self.nz+6].val,
+                                         coarse_b=torch.ones(1, 1, 1, 1) * z_sliders[self.nz+7].val,
+                                         coarse_br=torch.ones(1, 1, 1, 1) * z_sliders[self.nz+8].val,
+                                         orog=self.orog)
             img_in_plot.set_data(im.detach().numpy())
             fig2.canvas.draw_idle()
             fig2.suptitle('{}, {}'.format(coarse_pr.item(), torch.mean(im).item()))
@@ -110,13 +125,10 @@ class ValidationViz:
             if self.no > 0:
                 r = np.random.randint(len(climate_data))
                 self.orog = climate_data[r]['orog'].unsqueeze(0)
-            im = edgan_model.get_picture(latent=torch.Tensor(norm.ppf(z)), coarse_precipitation=coarse_pr, orog=self.orog)
-            img_in_plot.set_data(im.detach().numpy())
+            update(val)
             for coll in self.orog_in_plot.collections:
                 coll.remove()
             self.orog_in_plot = ax.contour(self.orog.view(8, 8))
-            fig2.canvas.draw_idle()
-            fig2.suptitle('{}, {}'.format(coarse_pr.item(), torch.mean(im).item()))
             plt.draw()
 
         for z_slider in z_sliders:

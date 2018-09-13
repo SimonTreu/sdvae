@@ -58,7 +58,16 @@ if opt.phase == 'train':
             orog = data['orog'].to(device)
 
             optimizer.zero_grad()
-            recon_pr, mu, log_var = edgan_model(fine_pr=fine_pr, coarse_pr=coarse_pr, orog=orog)
+            recon_pr, mu, log_var = edgan_model(fine_pr=fine_pr, coarse_pr=coarse_pr,
+                                                coarse_ul=data['coarse_ul'].to(device),
+                                                coarse_u=data['coarse_u'].to(device),
+                                                coarse_ur=data['coarse_ur'].to(device),
+                                                coarse_l=data['coarse_l'].to(device),
+                                                coarse_r=data['coarse_r'].to(device),
+                                                coarse_bl=data['coarse_bl'].to(device),
+                                                coarse_b=data['coarse_b'].to(device),
+                                                coarse_br=data['coarse_br'].to(device),
+                                                orog=orog)
             mse, kld, cycle_loss, loss = edgan_model.loss_function(recon_pr, fine_pr, mu, log_var,
                                                                    coarse_pr, cell_area)
             loss.backward()

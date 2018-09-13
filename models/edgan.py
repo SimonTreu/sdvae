@@ -54,16 +54,28 @@ class Edgan(nn.Module):
                                     kernel_size=3, padding=1, stride=2)
                           )
 
-    def forward(self, fine_pr, coarse_pr, orog):
+    def forward(self, fine_pr, coarse_pr,
+                coarse_ul, coarse_u, coarse_ur,
+                coarse_l, coarse_r,
+                coarse_bl, coarse_b, coarse_br,
+                orog):
         mu = self.mu(fine_pr)
         log_var = self.log_var(fine_pr)
         z = self.reparameterize(mu, log_var)
         if self.no > 0:
             o = self.encode_orog(orog)
             o2 = self.encode_orog_2(orog)
-            return self.decode(z, coarse_pr, o, o2), mu.view(-1, self.nz), log_var.view(-1, self.nz)
+            return self.decode(z, coarse_pr,
+                               coarse_ul, coarse_u, coarse_ur,
+                               coarse_l, coarse_r,
+                               coarse_bl, coarse_b, coarse_br,
+                               o, o2), mu.view(-1, self.nz), log_var.view(-1, self.nz)
         else:
-            return self.decode(z, coarse_pr), mu.view(-1, self.nz), log_var.view(-1, self.nz)
+            return self.decode(z, coarse_pr,
+                               coarse_ul, coarse_u, coarse_ur,
+                               coarse_l, coarse_r,
+                               coarse_bl, coarse_b, coarse_br,
+                               ), mu.view(-1, self.nz), log_var.view(-1, self.nz)
 
     def reparameterize(self, mu, log_var):
         if self.training:
@@ -73,15 +85,27 @@ class Edgan(nn.Module):
         else:
             return mu
 
-    def get_picture(self, coarse_precipitation, latent=None, orog=None):
+    def get_picture(self, coarse_precipitation,
+                    coarse_ul, coarse_u, coarse_ur,
+                    coarse_l, coarse_r,
+                    coarse_bl, coarse_b, coarse_br,
+                    latent=None, orog=None):
         if latent is None:
             latent = torch.randn(coarse_precipitation.shape[0], self.nz, 1, 1)
         if self.no > 0:
             o = self.encode_orog(orog)
             o2 = self.encode_orog_2(orog)
-            x_decoded = self.decode(z=latent, o=o, o2=o2, coarse_pr=coarse_precipitation)
+            x_decoded = self.decode(latent, coarse_precipitation,
+                               coarse_ul, coarse_u, coarse_ur,
+                               coarse_l, coarse_r,
+                               coarse_bl, coarse_b, coarse_br,
+                               o, o2)
         else:
-            x_decoded = self.decode(z=latent, coarse_pr=coarse_precipitation)
+            x_decoded = self.decode(latent, coarse_precipitation,
+                                    coarse_ul, coarse_u, coarse_ur,
+                                    coarse_l, coarse_r,
+                                    coarse_bl, coarse_b, coarse_br
+                                    )
         if coarse_precipitation.shape[0] == 1:
             return x_decoded.detach().view(8, 8)
         else:
@@ -108,7 +132,7 @@ class Decoder(nn.Module):
         self.no = no
         self.hidden_depth = hidden_depth
 
-        decoder_input_size = self.nz+self.no+1
+        decoder_input_size = self.nz+self.no+9
 
         # todo skip connections
 
@@ -116,7 +140,7 @@ class Decoder(nn.Module):
                                                        out_channels=hidden_depth,
                                                        kernel_size=4, stride=1, padding=0),
                                     nn.ReLU())
-        self.layer2 = nn.Sequential(nn.ConvTranspose2d(in_channels=hidden_depth + 1 +self.no,
+        self.layer2 = nn.Sequential(nn.ConvTranspose2d(in_channels=hidden_depth + 9 +self.no,
                                                        out_channels=hidden_depth * 2, kernel_size=4,
                                                        stride=2, padding=1),
                                     nn.ReLU())
@@ -124,17 +148,33 @@ class Decoder(nn.Module):
                                               kernel_size=3, stride=1, padding=1),
                                     nn.Threshold(value=threshold, threshold=threshold))
 
-
-    def forward(self, z, coarse_pr, o=None, o2=None):
+    def forward(self, z, coarse_pr,
+                coarse_ul, coarse_u, coarse_ur,
+                coarse_l, coarse_r,
+                coarse_bl, coarse_b, coarse_br,
+                o=None, o2=None):
         if o is None:
-            hidden_state = self.layer1(torch.cat((z, coarse_pr), 1))
+            hidden_state = self.layer1(torch.cat((z,
+                                                  coarse_pr,
+                                                  coarse_ul, coarse_u, coarse_ur,
+                                                  coarse_l, coarse_r,
+                                                  coarse_bl, coarse_b, coarse_br), 1))
             hidden_state2 = self.layer2(torch.cat((hidden_state,
-                                                   coarse_pr.expand(-1, -1, hidden_state.shape[-2],
-                                                                    hidden_state.shape[-1])), 1))
+                                        *[pr.expand(-1, -1, hidden_state.shape[-2], hidden_state.shape[-1])
+                                          for pr in [coarse_pr,coarse_ul, coarse_u, coarse_ur,
+                                                  coarse_l, coarse_r,
+                                                  coarse_bl, coarse_b, coarse_br]]), 1))
         else:
-            hidden_state = self.layer1(torch.cat((z, coarse_pr, o), 1))
+            hidden_state = self.layer1(torch.cat((z, coarse_pr,
+                                                  coarse_ul, coarse_u, coarse_ur,
+                                                  coarse_l, coarse_r,
+                                                  coarse_bl, coarse_b, coarse_br,
+                                                  o), 1))
             hidden_state2 = self.layer2(torch.cat((hidden_state,
-                                        coarse_pr.expand(-1, -1, hidden_state.shape[-2], hidden_state.shape[-1]),
+                                        *[pr.expand(-1, -1, hidden_state.shape[-2], hidden_state.shape[-1])
+                                          for pr in [coarse_pr,coarse_ul, coarse_u, coarse_ur,
+                                                  coarse_l, coarse_r,
+                                                  coarse_bl, coarse_b, coarse_br]],
                                         o2), 1))
         hidden_state3 = self.layer3(hidden_state2)
         return hidden_state3

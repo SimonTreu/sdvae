@@ -44,7 +44,16 @@ if not os.path.isfile(os.path.abspath(base_path + '_coarse_pr.pt')):
         coarse_pr = data['coarse_pr'].to(device)
         cell_area = data['cell_area'].to(device)
         orog = data['orog'].to(device)
-        recon_pr = edgan_model.get_picture(coarse_precipitation=coarse_pr, orog=orog)
+        recon_pr = edgan_model.get_picture(coarse_precipitation=coarse_pr,
+                                           coarse_ul=data['coarse_ul'].to(device),
+                                           coarse_u=data['coarse_u'].to(device),
+                                           coarse_ur=data['coarse_ur'].to(device),
+                                           coarse_l=data['coarse_l'].to(device),
+                                           coarse_r=data['coarse_r'].to(device),
+                                           coarse_bl=data['coarse_bl'].to(device),
+                                           coarse_b=data['coarse_b'].to(device),
+                                           coarse_br=data['coarse_br'].to(device),
+                                           orog=orog)
         if not(all_fine_pr is None):
             all_fine_pr = torch.cat((all_fine_pr, fine_pr), 0)
             all_recon_pr = torch.cat((all_recon_pr, recon_pr), 0)
