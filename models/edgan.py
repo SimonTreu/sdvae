@@ -69,12 +69,14 @@ class Edgan(nn.Module):
                                coarse_ul, coarse_u, coarse_ur,
                                coarse_l, coarse_r,
                                coarse_bl, coarse_b, coarse_br,
-                               o, o2), mu.view(-1, self.nz), log_var.view(-1, self.nz)
+                               orog=orog,
+                               o=o, o2=o2), mu.view(-1, self.nz), log_var.view(-1, self.nz)
         else:
             return self.decode(z, coarse_pr,
                                coarse_ul, coarse_u, coarse_ur,
                                coarse_l, coarse_r,
                                coarse_bl, coarse_b, coarse_br,
+                               orog=orog
                                ), mu.view(-1, self.nz), log_var.view(-1, self.nz)
 
     def reparameterize(self, mu, log_var):
@@ -89,22 +91,25 @@ class Edgan(nn.Module):
                     coarse_ul, coarse_u, coarse_ur,
                     coarse_l, coarse_r,
                     coarse_bl, coarse_b, coarse_br,
-                    latent=None, orog=None):
+                    orog,
+                    latent=None):
         if latent is None:
             latent = torch.randn(coarse_precipitation.shape[0], self.nz, 1, 1)
         if self.no > 0:
             o = self.encode_orog(orog)
             o2 = self.encode_orog_2(orog)
             x_decoded = self.decode(latent, coarse_precipitation,
-                               coarse_ul, coarse_u, coarse_ur,
-                               coarse_l, coarse_r,
-                               coarse_bl, coarse_b, coarse_br,
-                               o, o2)
+                                    coarse_ul, coarse_u, coarse_ur,
+                                    coarse_l, coarse_r,
+                                    coarse_bl, coarse_b, coarse_br,
+                                    orog=orog,
+                                    o=o, o2=o2)
         else:
             x_decoded = self.decode(latent, coarse_precipitation,
                                     coarse_ul, coarse_u, coarse_ur,
                                     coarse_l, coarse_r,
-                                    coarse_bl, coarse_b, coarse_br
+                                    coarse_bl, coarse_b, coarse_br,
+                                    orog=orog
                                     )
         if coarse_precipitation.shape[0] == 1:
             return x_decoded.detach().view(8, 8)
@@ -144,7 +149,7 @@ class Decoder(nn.Module):
                                                        out_channels=hidden_depth * 2, kernel_size=4,
                                                        stride=2, padding=1),
                                     nn.ReLU())
-        self.layer3 = nn.Sequential(nn.Conv2d(in_channels=hidden_depth * 2+1, out_channels=hidden_depth * 4,
+        self.layer3 = nn.Sequential(nn.Conv2d(in_channels=hidden_depth * 2+2, out_channels=hidden_depth * 4,
                                               kernel_size=3, stride=1, padding=1),
                                     nn.ReLU())
 
@@ -156,6 +161,7 @@ class Decoder(nn.Module):
                 coarse_ul, coarse_u, coarse_ur,
                 coarse_l, coarse_r,
                 coarse_bl, coarse_b, coarse_br,
+                orog,
                 o=None, o2=None):
         if o is None:
             hidden_state = self.layer1(torch.cat((z,
@@ -182,7 +188,8 @@ class Decoder(nn.Module):
                                         o2), 1))
         hidden_state3 = self.layer3(torch.cat((hidden_state2,
                                                coarse_pr.expand(-1, -1, hidden_state2.shape[-2],
-                                                                hidden_state2.shape[-1])),
+                                                                hidden_state2.shape[-1]),
+                                               orog),
                                               1))
         hidden_state4 = self.layer4(hidden_state3)
 
