@@ -23,6 +23,7 @@ class ClimateDataset(Dataset):
         return len(self.sample_paths)
 
     def __getitem__(self, item):
+        # todo load from netcdf instead
         start_time = time.time()
         sample_path = self.sample_paths[item]
         sample = torch.load(sample_path)
@@ -30,11 +31,13 @@ class ClimateDataset(Dataset):
         # random crop
         w = sample.shape[-2]
         h = sample.shape[-1]
+        # todo proper offset
         w_offset = random.randint(self.fine_size, max(0, w - 2 * self.fine_size - 1))
         h_offset = random.randint(self.fine_size, max(0, h - 2 * self.fine_size - 1))
 
-        # todo Normalize wind
+        # todo add wind
         # normalize pr
+        # todo no normalization
         sample[0].sub_(self.norm_parameters['mean_pr']).div_(self.norm_parameters['std_pr'])
         # normalize orog
         sample[-2].sub_(self.norm_parameters['mean_orog']).div_(self.norm_parameters['std_orog'])
@@ -85,6 +88,8 @@ class ClimateDataset(Dataset):
         fine_uas = input_sample[1]
         fine_vas = input_sample[2]
 
+        # todo use Upscale class instead
+
 
         coarse_pr = get_average(fine_pr.contiguous().view(1, -1),
                                 cell_area=cell_area.contiguous().view(1, -1)
@@ -131,6 +136,8 @@ class ClimateDataset(Dataset):
         fine_pr.unsqueeze_(0)
         orog.unsqueeze_(0)
 
+        #todo intput: fine_pr 32x32, coarse_pr=6x6, uas 6x6, vas 6x6, orog 32x32
+
         return {'fine_pr': fine_pr, 'file_path': sample_path, 'coarse_pr': coarse_pr,
                 'cell_area': cell_area, 'orog': orog, 'uas': uas, 'vas': vas, 'time': end_time,
                 'coarse_ul': coarse_ul, 'coarse_u': coarse_u, 'coarse_ur': coarse_ur,
@@ -139,6 +146,7 @@ class ClimateDataset(Dataset):
 
 
 # Helper Methods
+# todo remove helper methods here
 def is_torch_file(filename):
     return any(filename.endswith(extension) for extension in TORCH_EXTENSION)
 
