@@ -4,6 +4,7 @@ import torch
 import random
 import time
 from utils.upscale import get_average
+from netCDF4 import Dataset as Nc4Dataset
 
 TORCH_EXTENSION = [
     '.pt'
@@ -14,13 +15,34 @@ TORCH_EXTENSION = [
 class ClimateDataset(Dataset):
     def __init__(self, opt):
         self.root = opt.dataroot
-        self.dir_samples = os.path.join(opt.dataroot, opt.phase)
-        self.sample_paths = sorted(get_sample_files(self.dir_samples))
-        self.fine_size = opt.fine_size
-        self.norm_parameters = opt.mean_std
+        self.scale_factor = opt.scale_factor  # todo add to options
+        self.fine_size = opt.fine_size  # todo fix in option
+        self.cell_size = opt.fine_size + self.scale_factor
+        with Nc4Dataset(os.path.join(self.root, "dataset.nc4"), "r", format="NETCDF4") as file:
+            times = file['time'].size
+        # Number of 40x40 lat lon cells without test and validation cells * number of times
+        self.length = (18-4)*3*times
+
+        # remove 4 40 boxes to create a training set for each block of 40 rows
+        self.lat_lon_train = [[i for i in range(18)] for j in range(3)]
+        # lat = 30 deg north
+        self.lat_lon_train[0].remove(6)   # test
+        self.lat_lon_train[0].remove(10)  # test
+        self.lat_lon_train[0].remove(15)  # val
+        self.lat_lon_train[0].remove(16)  # val
+        # lat = 10 deg north
+        self.lat_lon_train[1].remove(0)   # test
+        self.lat_lon_train[1].remove(4)   # test
+        self.lat_lon_train[1].remove(12)  # val
+        self.lat_lon_train[1].remove(14)  # val
+        # lat = -10 deg north
+        self.lat_lon_train[2].remove(1)   # test
+        self.lat_lon_train[2].remove(7)   # test
+        self.lat_lon_train[2].remove(10)  # val
+        self.lat_lon_train[2].remove(13)  # val
 
     def __len__(self):
-        return len(self.sample_paths)
+        return self.length
 
     def __getitem__(self, item):
         # todo load from netcdf instead
