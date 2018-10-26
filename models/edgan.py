@@ -124,6 +124,7 @@ class Edgan(nn.Module):
         # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
         kld = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp()) * self.lambda_kl
         # cycle loss as mean squared error
+        # todo 64 is 8*8
         recon_average = get_average(recon_x.view(-1,64), cell_area.contiguous().view(-1, self.input_size))
         cycle_loss = torch.sum(torch.abs(coarse_pr.view(-1).sub(recon_average))) * self.lambda_cycle_l1
 

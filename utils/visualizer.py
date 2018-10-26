@@ -16,12 +16,6 @@ class Visualizer:
         self.training_size = training_size
         self.n_batches = n_batches
         self.csv_name = os.path.join('checkpoints', opt.name, 'loss.csv')
-        #epoch,
-          #         epoch_mse / self.training_size,
-          #         epoch_kld / self.training_size,
-          #         epoch_cycle_loss / self.training_size,
-          #         epoch_loss / self.training_size,
-          #         epoch_time
         self.csv_epoch_name = os.path.join('checkpoints', opt.name, 'loss_epoch.csv')
         util.mkdir(self.image_path)
         if opt.load_epoch < 0:
@@ -107,7 +101,7 @@ class ValidationViz:
         self.vmax = 7
 
     def plot_latent_walker(self, edgan_model, climate_data):
-        fig2, ax = plt.subplots(figsize=(50,50))
+        fig, ax = plt.subplots(figsize=(50,50))
         offset = 0.025 * (self.nz + 9)
         plt.subplots_adjust(bottom=0.15 + offset)
 
@@ -149,8 +143,8 @@ class ValidationViz:
                                          coarse_br=torch.ones(1, 1, 1, 1) * z_sliders[self.nz+8].val,
                                          orog=self.orog)
             img_in_plot.set_data(im.detach().numpy())
-            fig2.canvas.draw_idle()
-            fig2.suptitle('{}, {}'.format(coarse_pr.item(), torch.mean(im).item()))
+            fig.canvas.draw_idle()
+            fig.suptitle('{}, {}'.format(coarse_pr.item(), torch.mean(im).item()))
             plt.draw()
 
         def update_orog(val):
@@ -170,5 +164,5 @@ class ValidationViz:
         b_orog = Button(ax_button, 'Orog')
         b_orog.on_clicked(update_orog)
 
-        fig2.show()
+        fig.show()
         plt.show()
