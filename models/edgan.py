@@ -4,7 +4,7 @@ from utils.upscale import Upscale
 
 
 class Edgan(nn.Module):
-    def __init__(self, opt):
+    def __init__(self, opt, device):
         super(Edgan, self).__init__()
         # variables
         self.nz = opt.nz
@@ -12,7 +12,7 @@ class Edgan(nn.Module):
         self.lambda_cycle_l1 = opt.lambda_cycle_l1
         self.lambda_kl = opt.lambda_kl
         self.input_size = opt.fine_size ** 2
-        self.upscaler = Upscale(size=opt.fine_size, scale_factor=8)
+        self.upscaler = Upscale(size=opt.fine_size, scale_factor=8, device=device)
 
         d_hidden = opt.d_hidden
         threshold = opt.threshold

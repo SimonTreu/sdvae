@@ -25,12 +25,12 @@ def upscale(cell_area, scale_factor, upscaling_vars, orog):
 
 
 class Upscale:
-    def __init__(self, size, scale_factor):
+    def __init__(self, size, scale_factor, device=torch.device("cpu")):
         if size % scale_factor != 0:
             raise ValueError("size must be divisible "
                              "by scale_factor, size={}, scale_factor={}".format(size, scale_factor))
         self.size = size
-        self.s = torch.zeros((size // scale_factor, size), dtype=torch.float)
+        self.s = torch.zeros((size // scale_factor, size), dtype=torch.float, device=device)
         for i in range(size // scale_factor):
             for j in range(i*scale_factor, (i+1)*scale_factor):
                 self.s[i,j] = 1

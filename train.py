@@ -25,7 +25,7 @@ climate_data_loader = DataLoader(climate_data,
                                  num_workers=int(opt.n_threads))
 
 # load the model
-edgan_model = Edgan(opt=opt).to(device)
+edgan_model = Edgan(opt=opt, device=device).to(device)
 initial_epoch = 0
 if opt.load_epoch >= 0:
     save_name = "epoch_{}.pth".format(opt.load_epoch)
