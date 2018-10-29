@@ -10,7 +10,7 @@ import time
 
 
 opt = BaseOptions().parse()
-device = torch.device("cuda:{}.format(self.gpu_ids[0])" if len(opt.gpu_ids) > 0 else "cpu")
+device = torch.device("cuda:{}".format(opt.gpu_ids[0]) if len(opt.gpu_ids) > 0 else "cpu")
 
 # create save dir
 save_root = os.path.join('checkpoints', opt.name)
