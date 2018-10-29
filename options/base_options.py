@@ -46,6 +46,10 @@ class BaseOptions:
                                  help="if >= 0 load a pretrained model at the defined epoch")
         self.parser.add_argument('--scale_factor', type=int, default=8,
                                  help="the scale factor defines by which factor the spacial resolution is increased")
+        self.parser.add_argument('--n_samples', type=int, default=3,
+                                         help="number of downscaled samples created for each cell in test")
+        self.parser.add_argument('--results_dir', type=str, default='./results/', help='saves results here.')
+
 
     def parse(self):
         opt = self.parser.parse_args()

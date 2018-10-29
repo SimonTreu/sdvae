@@ -3,17 +3,17 @@ from torch.utils.data import DataLoader
 from models.edgan import Edgan
 from utils.visualizer import ValidationViz
 from netCDF4 import Dataset
-from utils.util import make_netcdf_dataset
-from utils.upscale import upscale
-from matplotlib.widgets import Button
-import matplotlib.pyplot as plt
-import numpy as np
+import datetime
+from utils.upscale import Upscale
 
 import torch
 import os
 from options.base_options import BaseOptions
 from utils.validate_distribution import ValObj, save_val_data
 opt = BaseOptions().parse()
+
+n_samples = opt.n_samples
+upscaler = Upscale(size=opt.fine_size+2*opt.scale_factor, scale_factor=opt.scale_factor)
 device = torch.device("cuda" if len(opt.gpu_ids) > 0 else "cpu")
 
 # create save dir
@@ -29,7 +29,7 @@ climate_data_loader = DataLoader(climate_data,
                                  num_workers=int(opt.n_threads))
 
 # load the model
-edgan_model = Edgan(opt=opt).to(device)
+edgan_model = Edgan(opt=opt, device=device).to(device)
 initial_epoch = 0
 if opt.load_epoch >= 0:
     save_name = "epoch_{}.pth".format(opt.load_epoch)
@@ -38,166 +38,95 @@ if opt.load_epoch >= 0:
     initial_epoch = opt.load_epoch + 1
 
 # Iterate the netcdf files and plot reconstructed images.
-dir_samples = os.path.join(opt.dataroot, 'nc4_data', opt.phase)
-nc4_sample_paths = sorted(make_netcdf_dataset(dir_samples))
+nc4_sample_paths = [os.path.join(opt.dataroot, 'test.0.6.nc4')] # todo make it properly
+
+outdir = os.path.join(opt.results_dir, opt.name, '%s_%s' % (opt.phase, opt.load_epoch))
+if not os.path.exists(outdir):
+    os.makedirs(outdir)
+index = 0
 for input_dataset_path in nc4_sample_paths:
-    with Dataset(input_dataset_path, "r", format="NETCDF4") as input_dataset:
-        prs = torch.Tensor(input_dataset['pr'][:])
-        orog = torch.Tensor(input_dataset['orog'][:])
-        cell_area = torch.Tensor(input_dataset['cell_area'][:])
+    # create output path
+    basename = os.path.basename(input_dataset_path)
+    outpath = os.path.join(outdir, basename)
+    # print
+    print("test file nr. {} name: {}".format(index, basename))
+    index += 1
+    # read input file
+    input_dataset = Dataset(input_dataset_path, "r", format="NETCDF4")
+    # create output file
+    output_dataset_path = os.path.join(outdir, basename)
+    output_dataset = Dataset(output_dataset_path, "w", format="NETCDF4")
+    output_dataset.setncatts({k: input_dataset.getncattr(k) for k in input_dataset.ncattrs()})
+    # add own metadata
+    output_dataset.creators = "Simon Treu (EDGAN, sitreu@pik-potsdam.de)\n" + output_dataset.creators
+    output_dataset.history = datetime.date.today().isoformat() + " Added Downscaled images in python with pix2pix-edgan\n" + output_dataset.history
 
-        # normalize pr and orog
-        prs.sub_(opt.mean_std['mean_pr']).div_(opt.mean_std['std_pr'])
-        orog.sub_(opt.mean_std['mean_orog']).div_(opt.mean_std['std_orog'])
-        # get a random element:
-        r = np.random.randint(0, prs.shape[0])
-        # get coarse pr
-        fine_pr = prs[r]
-        coarse_pr = upscale(cell_area=cell_area,
-                            scale_factor=opt.fine_size,
-                            upscaling_vars=[fine_pr],
-                            orog=orog)[0].to(device)  # only pr
-        # get recon pr
-        def get_recon():
-            recon_pr = torch.zeros((24,24))
-            # ul
-            recon_pr[:8, :8] = edgan_model.get_picture(coarse_ul=coarse_pr[0, 0].view(1,1,1,1),
-                                                       coarse_u=coarse_pr[8, 0].view(1,1,1,1),
-                                                       coarse_ur=coarse_pr[16, 0].view(1,1,1,1),
-                                                       coarse_l=coarse_pr[0, 8].view(1,1,1,1),
-                                                       coarse_precipitation=coarse_pr[8, 8].view(1,1,1,1),
-                                                       coarse_r=coarse_pr[16, 8].view(1,1,1,1),
-                                                       coarse_bl=coarse_pr[0, 16].view(1,1,1,1),
-                                                       coarse_b=coarse_pr[8, 16].view(1,1,1,1),
-                                                       coarse_br=coarse_pr[16, 16].view(1,1,1,1),
-                                                       orog=orog[8:16, 8:16].view(1,1,8,8))
-            # u
-            recon_pr[8:16, :8] = edgan_model.get_picture(coarse_ul=coarse_pr[8, 0].view(1,1,1,1),
-                                                         coarse_u=coarse_pr[16, 0].view(1,1,1,1),
-                                                         coarse_ur=coarse_pr[24, 0].view(1,1,1,1),
-                                                         coarse_l=coarse_pr[8, 8].view(1,1,1,1),
-                                                         coarse_precipitation=coarse_pr[16, 8].view(1,1,1,1),
-                                                         coarse_r=coarse_pr[24, 8].view(1,1,1,1),
-                                                         coarse_bl=coarse_pr[8, 16].view(1,1,1,1),
-                                                         coarse_b=coarse_pr[16, 16].view(1,1,1,1),
-                                                         coarse_br=coarse_pr[24, 16].view(1,1,1,1),
-                                                         orog=orog[16:24, 8:16].view(1,1,8,8))
+    output_dataset.createDimension("time", None)
+    output_dataset.createDimension("lon", opt.fine_size+2*opt.scale_factor)
+    output_dataset.createDimension("lat", opt.fine_size+2*opt.scale_factor)
 
-            # ur
-            recon_pr[16:24, :8] = edgan_model.get_picture(coarse_ul=coarse_pr[16, 0].view(1,1,1,1),
-                                                          coarse_u=coarse_pr[24, 0].view(1,1,1,1),
-                                                          coarse_ur=coarse_pr[32, 0].view(1,1,1,1),
-                                                          coarse_l=coarse_pr[16, 8].view(1,1,1,1),
-                                                          coarse_precipitation=coarse_pr[24, 8].view(1,1,1,1),
-                                                          coarse_r=coarse_pr[32, 8].view(1,1,1,1),
-                                                          coarse_bl=coarse_pr[16, 16].view(1,1,1,1),
-                                                          coarse_b=coarse_pr[24, 16].view(1,1,1,1),
-                                                          coarse_br=coarse_pr[32, 16].view(1,1,1,1),
-                                                          orog=orog[24:32, 8:16].view(1,1,8,8))
+    # Copy variables
+    for v_name, varin in input_dataset.variables.items():
+        outVar = output_dataset.createVariable(v_name, varin.datatype, varin.dimensions)
+        # Copy variable attributes
+        outVar.setncatts({k: varin.getncattr(k) for k in varin.ncattrs()})
+    # Create variable for downscaling
+    for k in range(n_samples):
+        downscaled_pr = output_dataset.createVariable("downscaled_pr_{}".format(k), output_dataset['pr'].datatype,
+                                                      output_dataset['pr'].dimensions)
+        downscaled_pr.setncatts({k: output_dataset['pr'].getncattr(k) for k in output_dataset['pr'].ncattrs()})
+        downscaled_pr.standard_name += '_downscaled'
+        downscaled_pr.long_name += '_downscaled'
+        downscaled_pr.comment = 'downscaled ' + downscaled_pr.comment
 
-            # l
-            recon_pr[:8, 8:16] = edgan_model.get_picture(coarse_ul=coarse_pr[0, 8].view(1,1,1,1),
-                                                         coarse_u=coarse_pr[8, 8].view(1,1,1,1),
-                                                         coarse_ur=coarse_pr[16, 8].view(1,1,1,1),
-                                                         coarse_l=coarse_pr[0, 16].view(1,1,1,1),
-                                                         coarse_precipitation=coarse_pr[8, 16].view(1,1,1,1),
-                                                         coarse_r=coarse_pr[16, 16].view(1,1,1,1),
-                                                         coarse_bl=coarse_pr[0, 24].view(1,1,1,1),
-                                                         coarse_b=coarse_pr[8, 24].view(1,1,1,1),
-                                                         coarse_br=coarse_pr[16, 24].view(1,1,1,1),
-                                                         orog=orog[8:16, 16:24].view(1,1,8,8))
+    # set variable values
+    for var in ['lat', 'lon']:
+        output_dataset[var][:] = input_dataset[var][:]
+    output_dataset['time'][:] = input_dataset['time'][:]
+    # crop to 32x32
 
-            # c
-            recon_pr[8:16, 8:16] = edgan_model.get_picture(coarse_ul=coarse_pr[8, 8].view(1,1,1,1),
-                                                           coarse_u=coarse_pr[16, 8].view(1,1,1,1),
-                                                           coarse_ur=coarse_pr[24, 8].view(1,1,1,1),
-                                                           coarse_l=coarse_pr[8, 16].view(1,1,1,1),
-                                                           coarse_precipitation=coarse_pr[16, 16].view(1,1,1,1),
-                                                           coarse_r=coarse_pr[24, 16].view(1,1,1,1),
-                                                           coarse_bl=coarse_pr[8, 24].view(1,1,1,1),
-                                                           coarse_b=coarse_pr[16, 24].view(1,1,1,1),
-                                                           coarse_br=coarse_pr[24, 24].view(1,1,1,1),
-                                                           orog=orog[16:24, 16:24].view(1,1,8,8))
+    output_dataset['orog'][:] = input_dataset['orog'][:]
+    output_dataset['pr'][:] = input_dataset['pr'][:]
+    for k in range(n_samples):
+        output_dataset['downscaled_pr_{}'.format(k)][:] = input_dataset['pr'][:]
 
-            # r
-            recon_pr[16:24, 8:16] = edgan_model.get_picture(coarse_ul=coarse_pr[16, 8].view(1,1,1,1),
-                                                            coarse_u=coarse_pr[24, 8].view(1,1,1,1),
-                                                            coarse_ur=coarse_pr[32, 8].view(1,1,1,1),
-                                                            coarse_l=coarse_pr[16, 16].view(1,1,1,1),
-                                                            coarse_precipitation=coarse_pr[24, 16].view(1,1,1,1),
-                                                            coarse_r=coarse_pr[32, 16].view(1,1,1,1),
-                                                            coarse_bl=coarse_pr[16, 24].view(1,1,1,1),
-                                                            coarse_b=coarse_pr[24, 24].view(1,1,1,1),
-                                                            coarse_br=coarse_pr[32, 24].view(1,1,1,1),
-                                                            orog=orog[24:32, 16:24].view(1,1,8,8))
+    output_dataset['uas'][:] = input_dataset['uas'][:]
+    output_dataset['vas'][:] = input_dataset['vas'][:]
 
-            # bl
-            recon_pr[:8, 16:24] = edgan_model.get_picture(coarse_ul=coarse_pr[0, 16].view(1,1,1,1),
-                                                          coarse_u=coarse_pr[8, 16].view(1,1,1,1),
-                                                          coarse_ur=coarse_pr[16, 16].view(1,1,1,1),
-                                                          coarse_l=coarse_pr[0, 24].view(1,1,1,1),
-                                                          coarse_precipitation=coarse_pr[8, 24].view(1,1,1,1),
-                                                          coarse_r=coarse_pr[16, 24].view(1,1,1,1),
-                                                          coarse_bl=coarse_pr[0, 32].view(1,1,1,1),
-                                                          coarse_b=coarse_pr[8, 32].view(1,1,1,1),
-                                                          coarse_br=coarse_pr[16, 32].view(1,1,1,1),
-                                                          orog=orog[8:16, 24:32].view(1,1,8,8))
+    # read out the variables similar to construct_datasets.py
+    pr = output_dataset['pr'][:]
 
-            # b
-            recon_pr[8:16, 16:24] = edgan_model.get_picture(coarse_ul=coarse_pr[8, 16].view(1,1,1,1),
-                                                            coarse_u=coarse_pr[16, 16].view(1,1,1,1),
-                                                            coarse_ur=coarse_pr[24, 16].view(1,1,1,1),
-                                                            coarse_l=coarse_pr[8, 24].view(1,1,1,1),
-                                                            coarse_precipitation=coarse_pr[16, 24].view(1,1,1,1),
-                                                            coarse_r=coarse_pr[24, 24].view(1,1,1,1),
-                                                            coarse_bl=coarse_pr[8, 32].view(1,1,1,1),
-                                                            coarse_b=coarse_pr[16, 32].view(1,1,1,1),
-                                                            coarse_br=coarse_pr[24, 32].view(1,1,1,1),
-                                                            orog=orog[16:24, 24:32].view(1,1,8,8))
+    uas = output_dataset['uas'][:]
+    vas = output_dataset['vas'][:]
+    orog = output_dataset['orog'][:]
 
-            # br
-            recon_pr[16:24, 16:24] = edgan_model.get_picture(coarse_ul=coarse_pr[16, 16].view(1,1,1,1),
-                                                            coarse_u=coarse_pr[24, 16].view(1,1,1,1),
-                                                            coarse_ur=coarse_pr[32, 16].view(1,1,1,1),
-                                                            coarse_l=coarse_pr[16, 24].view(1,1,1,1),
-                                                            coarse_precipitation=coarse_pr[24, 24].view(1,1,1,1),
-                                                            coarse_r=coarse_pr[32, 24].view(1,1,1,1),
-                                                            coarse_bl=coarse_pr[16, 32].view(1,1,1,1),
-                                                            coarse_b=coarse_pr[24, 32].view(1,1,1,1),
-                                                            coarse_br=coarse_pr[32, 32].view(1,1,1,1),
-                                                            orog=orog[24:32, 24:32].view(1,1,8,8))
-            return recon_pr
-        # plot a random pr field
-        recon_pr = get_recon()
-        fig, ax = plt.subplots(1,3)
-        offset = plt.subplots_adjust(bottom=0.2)
+    times = pr.shape[0]
+    for t in range(times):
+        pr_tensor = torch.Tensor(pr[t, :, :])
+        orog_tensor = torch.Tensor(orog[opt.scale_factor:-opt.scale_factor,
+                                   opt.scale_factor:-opt.scale_factor]).unsqueeze(0).unsqueeze(0)
+        uas_tensor = torch.Tensor(uas[t, :, :])
+        vas_tensor = torch.Tensor(vas[t, :, :])
 
-        vmin = opt.threshold
-        vmax = 15
-        ax[0].imshow(fine_pr[8:32,8:32], origin='lower',
-                                 cmap=plt.get_cmap('jet'), vmin=vmin, vmax=vmax)
-        ax[0].set_title('Fine Pr')
-        recon_im = ax[1].imshow(recon_pr, origin='lower',
-                                 cmap=plt.get_cmap('jet'), vmin=vmin, vmax=vmax)
-        ax[1].set_title('Recon Pr')
+        coarse_pr = upscaler.upscale(pr_tensor).unsqueeze(0).unsqueeze(0)
+        coarse_uas = upscaler.upscale(uas_tensor).unsqueeze(0).unsqueeze(0)
+        coarse_vas = upscaler.upscale(vas_tensor).unsqueeze(0).unsqueeze(0)
+        for k in range(n_samples):
+            with torch.no_grad():
+                recon_pr = edgan_model.decode(z=torch.randn(1, opt.nz, 1, 1, device=device),
+                                              coarse_pr=coarse_pr,coarse_uas=coarse_uas,
+                                              coarse_vas=coarse_vas, orog=orog_tensor)
 
-        ax[2].imshow(coarse_pr, origin='lower',
-                     cmap=plt.get_cmap('jet'), vmin=vmin, vmax=vmax)
-        ax[2].set_title('Coarse Pr')
+            output_dataset['downscaled_pr_{}'.format(k)][t, opt.scale_factor:-opt.scale_factor, opt.scale_factor:-opt.scale_factor] = recon_pr
 
-        def new_recon(val):
-            recon_pr = get_recon()
-            recon_im.set_data(recon_pr)
-            fig.canvas.draw_idle()
-            plt.draw()
-        ax_button = plt.axes([0.81, 0.0, 0.1, 0.075])
-        b_orog = Button(ax_button, 'New Recon')
-        b_orog.on_clicked(new_recon)
+    # read out the variables
+    # create reanalysis result (croped to 32*32)
+    # compute downscaled images
+    # save them in result dataset
+    output_dataset.close()
+    input_dataset.close()
 
-        plt.show()
-
-        pass
-
+'''
 # Plot Figure to evaluate latent space
 viz = ValidationViz(opt)
 viz.plot_latent_walker(edgan_model, climate_data)
@@ -234,6 +163,5 @@ if not os.path.isfile(os.path.abspath(base_path + '_coarse_pr.pt')):
 
 val_obj = ValObj(base_path, min=20, max=50)
 val_obj.evaluate_distribution()
-pass
 
-
+'''
