@@ -10,7 +10,7 @@ import time
 
 
 opt = BaseOptions().parse()
-device = torch.device("cuda" if len(opt.gpu_ids) > 0 else "cpu")
+device = torch.device("cuda:{}.format(self.gpu_ids[0])" if len(opt.gpu_ids) > 0 else "cpu")
 
 # create save dir
 save_root = os.path.join('checkpoints', opt.name)
@@ -36,7 +36,7 @@ if opt.load_epoch >= 0:
 if opt.phase == 'train':
     # get optimizer
     edgan_model.train()
-    optimizer = torch.optim.Adam(edgan_model.parameters(), lr=opt.lr)  # TODO which optimizer / lr / lr decay
+    optimizer = torch.optim.Adam(edgan_model.parameters(), lr=opt.lr)
     viz = Visualizer(opt, n_images=5, training_size=len(climate_data_loader.dataset), n_batches=len(climate_data_loader))
 
     for epoch_idx in range(opt.n_epochs):
@@ -54,22 +54,17 @@ if opt.phase == 'train':
             iter_start_time = time.time()
             fine_pr = data['fine_pr'].to(device)
             coarse_pr = data['coarse_pr'].to(device)
-            cell_area = data['cell_area'].to(device)
+            coarse_uas = data['coarse_uas'].to(device)
+            coarse_vas = data['coarse_vas'].to(device)
             orog = data['orog'].to(device)
 
             optimizer.zero_grad()
+            # todo edgan model
             recon_pr, mu, log_var = edgan_model(fine_pr=fine_pr, coarse_pr=coarse_pr,
-                                                coarse_ul=data['coarse_ul'].to(device),
-                                                coarse_u=data['coarse_u'].to(device),
-                                                coarse_ur=data['coarse_ur'].to(device),
-                                                coarse_l=data['coarse_l'].to(device),
-                                                coarse_r=data['coarse_r'].to(device),
-                                                coarse_bl=data['coarse_bl'].to(device),
-                                                coarse_b=data['coarse_b'].to(device),
-                                                coarse_br=data['coarse_br'].to(device),
-                                                orog=orog)
+                                                orog=orog, coarse_uas=coarse_uas, coarse_vas=coarse_vas)
+            # todo loss function
             mse, kld, cycle_loss, loss = edgan_model.loss_function(recon_pr, fine_pr, mu, log_var,
-                                                                   coarse_pr, cell_area)
+                                                                   coarse_pr)
             loss.backward()
 
             epoch_mse += mse.item()
@@ -111,9 +106,3 @@ if opt.phase == 'train':
         edgan_model.cuda(opt.gpu_ids[0])
     else:
         torch.save(edgan_model.cpu().state_dict(), save_dir)
-
-# TODO normalize all input data with the area weights
-# TODO input log(pr + 1) normalized
-# TODO what normalization for orog
-# TODO compare MSE of validation set
-

@@ -16,23 +16,33 @@ class Edgan(nn.Module):
         d_hidden = opt.d_hidden
         threshold = opt.threshold
 
-        # hidden layer (shared by mu and log_var):
-        hidden_layer = [nn.Conv2d(in_channels=1, out_channels=d_hidden,
+        # todo also enable removing orog
+        # todo in_channels should be a variable
+        self.h_layer1 = nn.Sequential(nn.Conv2d(in_channels=2, out_channels=d_hidden,
                                   kernel_size=3, padding=1, stride=1),
                         nn.BatchNorm2d(d_hidden),
                         nn.ReLU(),
-                        nn.MaxPool2d(kernel_size=2)]
+                        nn.MaxPool2d(kernel_size=2))
+
+        self.h_layer2 = nn.Sequential(nn.Conv2d(in_channels=d_hidden, out_channels=d_hidden*2,
+                                  kernel_size=4, padding=0, stride=1),
+                        nn.BatchNorm2d(d_hidden*2),
+                        nn.ReLU(),
+                        nn.MaxPool2d(kernel_size=2))
+        # todo 3 is uas, vas + coarse_pr and should be a variable
+        self.h_layer3 = nn.Sequential(nn.Conv2d(in_channels=2*d_hidden+3, out_channels=d_hidden*3,
+                                  kernel_size=3, padding=1, stride=1),
+                        nn.BatchNorm2d(d_hidden*3),
+                        nn.ReLU(),
+                        nn.MaxPool2d(kernel_size=2))
 
         # mu
-        mu = [nn.Conv2d(in_channels=d_hidden, out_channels=self.nz,
-                        kernel_size=4, padding=0, stride=1)]
+        self.mu = nn.Sequential(nn.Conv2d(in_channels=3*d_hidden, out_channels=self.nz,
+                        kernel_size=3, padding=0, stride=1))
 
         # log_var
-        log_var = [nn.Conv2d(in_channels=d_hidden, out_channels=self.nz,
-                             kernel_size=4, padding=0, stride=1)]
-
-        self.mu = nn.Sequential(*hidden_layer, *mu)
-        self.log_var = nn.Sequential(*hidden_layer, *log_var)
+        self.log_var = nn.Sequential(nn.Conv2d(in_channels=3*d_hidden, out_channels=self.nz,
+                             kernel_size=3, padding=0, stride=1))
 
         self.decode = Decoder(nz=self.nz, no=self.no, threshold=threshold,
                               hidden_depth=opt.decoder_hidden_depth)
@@ -54,22 +64,22 @@ class Edgan(nn.Module):
                                     kernel_size=3, padding=1, stride=2)
                           )
 
-    def forward(self, fine_pr, coarse_pr,
-                coarse_ul, coarse_u, coarse_ur,
-                coarse_l, coarse_r,
-                coarse_bl, coarse_b, coarse_br,
-                orog):
-        mu = self.mu(fine_pr)
-        log_var = self.log_var(fine_pr)
+    def forward(self, fine_pr, coarse_pr, orog, coarse_uas, coarse_vas):
+        h_layer1 = self.h_layer1(torch.cat((fine_pr, orog),1)) # shape = n_batch,n_channels, 6,6
+        h_layer2 = self.h_layer2(h_layer1) # shape = n_batch,n_channels, 6,6
+        h_layer3 = self.h_layer3(torch.cat((h_layer2, coarse_pr, coarse_uas, coarse_vas), 1))
+
+        mu = self.mu(h_layer3)
+        log_var = self.log_var(h_layer3)
         z = self.reparameterize(mu, log_var)
+
+        # todo remove this if and else here
         if self.no > 0:
             o = self.encode_orog(orog)
             o2 = self.encode_orog_2(orog)
-            return self.decode(z, coarse_pr,
-                               coarse_ul, coarse_u, coarse_ur,
-                               coarse_l, coarse_r,
-                               coarse_bl, coarse_b, coarse_br,
-                               orog=orog,
+            # todo fix decoder
+            return self.decode(z=z, coarse_pr=coarse_pr,
+                               orog=orog, coarse_uas=coarse_uas, coarse_vas=coarse_vas,
                                o=o, o2=o2), mu.view(-1, self.nz), log_var.view(-1, self.nz)
         else:
             return self.decode(z, coarse_pr,
