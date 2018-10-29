@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-from utils.upscale import get_average
+from utils.upscale import Upscale
 
 
 class Edgan(nn.Module):
@@ -12,6 +12,7 @@ class Edgan(nn.Module):
         self.lambda_cycle_l1 = opt.lambda_cycle_l1
         self.lambda_kl = opt.lambda_kl
         self.input_size = opt.fine_size ** 2
+        self.upscaler = Upscale(size=opt.fine_size, scale_factor=8)
 
         d_hidden = opt.d_hidden
         threshold = opt.threshold
@@ -82,11 +83,8 @@ class Edgan(nn.Module):
                                orog=orog, coarse_uas=coarse_uas, coarse_vas=coarse_vas,
                                o=o, o2=o2), mu.view(-1, self.nz), log_var.view(-1, self.nz)
         else:
-            return self.decode(z, coarse_pr,
-                               coarse_ul, coarse_u, coarse_ur,
-                               coarse_l, coarse_r,
-                               coarse_bl, coarse_b, coarse_br,
-                               orog=orog
+            return self.decode(z=z, coarse_pr=coarse_pr,
+                               orog=orog, coarse_uas=coarse_uas, coarse_vas=coarse_vas
                                ), mu.view(-1, self.nz), log_var.view(-1, self.nz)
 
     def reparameterize(self, mu, log_var):
@@ -126,7 +124,7 @@ class Edgan(nn.Module):
         else:
             return x_decoded.detach()
 
-    def loss_function(self, recon_x, x, mu, log_var, coarse_pr, cell_area):
+    def loss_function(self, recon_x, x, mu, log_var, coarse_pr):
         mse = nn.functional.mse_loss(recon_x, x, size_average=False)
         # see Appendix B from VAE paper:
         #Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
@@ -134,9 +132,9 @@ class Edgan(nn.Module):
         # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
         kld = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp()) * self.lambda_kl
         # cycle loss as mean squared error
-        # todo 64 is 8*8
-        recon_average = get_average(recon_x.view(-1,64), cell_area.contiguous().view(-1, self.input_size))
-        cycle_loss = torch.sum(torch.abs(coarse_pr.view(-1).sub(recon_average))) * self.lambda_cycle_l1
+        coarse_recon = self.upscaler.upscale(recon_x)
+        coarse_pr = coarse_pr[:,:,1:-1,1:-1]
+        cycle_loss = torch.sum(torch.abs(coarse_pr.contiguous().view(-1).sub(coarse_recon.view(-1)))) * self.lambda_cycle_l1
 
         return mse, kld, cycle_loss, mse + kld + cycle_loss
 
@@ -148,60 +146,43 @@ class Decoder(nn.Module):
         self.no = no
         self.hidden_depth = hidden_depth
 
-        decoder_input_size = self.nz+self.no+9
 
         # todo skip connections
+        # todo dropout or BatchNorm
 
-        self.layer1 = nn.Sequential(nn.ConvTranspose2d(in_channels=decoder_input_size,
+        self.layer1 = nn.Sequential(nn.ConvTranspose2d(in_channels=self.nz,
                                                        out_channels=hidden_depth,
-                                                       kernel_size=4, stride=1, padding=0),
+                                                       kernel_size=6, stride=1, padding=0),
                                     nn.ReLU())
-        self.layer2 = nn.Sequential(nn.ConvTranspose2d(in_channels=hidden_depth + 9 +self.no,
+        # todo put 3 (uas+vas+coarse_pr) to some variable
+        self.layer2 = nn.Sequential(nn.ConvTranspose2d(in_channels=hidden_depth+self.no+3,
+                                                       out_channels=hidden_depth * 2, kernel_size=5,
+                                                       stride=2, padding=0),
+                                    nn.ReLU())
+        self.layer3 = nn.Sequential(nn.ConvTranspose2d(in_channels=hidden_depth * 2,
                                                        out_channels=hidden_depth * 2, kernel_size=4,
-                                                       stride=2, padding=1),
+                                                       stride=2, padding=0),
                                     nn.ReLU())
-        self.layer3 = nn.Sequential(nn.Conv2d(in_channels=hidden_depth * 2+2, out_channels=hidden_depth * 4,
+        self.layer4 = nn.Sequential(nn.Conv2d(in_channels=hidden_depth * 2+1, out_channels=hidden_depth * 4,
                                               kernel_size=3, stride=1, padding=1),
                                     nn.ReLU())
 
-        self.layer4 = nn.Sequential(nn.Conv2d(in_channels=hidden_depth * 4, out_channels=1,
+        self.layer5 = nn.Sequential(nn.Conv2d(in_channels=hidden_depth * 4, out_channels=1,
                                               kernel_size=3, stride=1, padding=1),
                                     nn.Threshold(value=threshold, threshold=threshold))
 
     def forward(self, z, coarse_pr,
-                coarse_ul, coarse_u, coarse_ur,
-                coarse_l, coarse_r,
-                coarse_bl, coarse_b, coarse_br,
-                orog,
-                o=None, o2=None):
+                coarse_uas, coarse_vas, orog,
+                o=None):
         if o is None:
-            hidden_state = self.layer1(torch.cat((z,
-                                                  coarse_pr,
-                                                  coarse_ul, coarse_u, coarse_ur,
-                                                  coarse_l, coarse_r,
-                                                  coarse_bl, coarse_b, coarse_br), 1))
-            hidden_state2 = self.layer2(torch.cat((hidden_state,
-                                        *[pr.expand(-1, -1, hidden_state.shape[-2], hidden_state.shape[-1])
-                                          for pr in [coarse_pr,coarse_ul, coarse_u, coarse_ur,
-                                                  coarse_l, coarse_r,
-                                                  coarse_bl, coarse_b, coarse_br]]), 1))
+            hidden_state = self.layer1(z)
+            hidden_state2 = self.layer2(torch.cat((hidden_state, coarse_pr, coarse_uas, coarse_vas), 1))
         else:
-            hidden_state = self.layer1(torch.cat((z, coarse_pr,
-                                                  coarse_ul, coarse_u, coarse_ur,
-                                                  coarse_l, coarse_r,
-                                                  coarse_bl, coarse_b, coarse_br,
-                                                  o), 1))
-            hidden_state2 = self.layer2(torch.cat((hidden_state,
-                                        *[pr.expand(-1, -1, hidden_state.shape[-2], hidden_state.shape[-1])
-                                          for pr in [coarse_pr,coarse_ul, coarse_u, coarse_ur,
-                                                  coarse_l, coarse_r,
-                                                  coarse_bl, coarse_b, coarse_br]],
-                                        o2), 1))
-        hidden_state3 = self.layer3(torch.cat((hidden_state2,
-                                               coarse_pr.expand(-1, -1, hidden_state2.shape[-2],
-                                                                hidden_state2.shape[-1]),
-                                               orog),
-                                              1))
-        hidden_state4 = self.layer4(hidden_state3)
+            hidden_state = self.layer1(z)
+            hidden_state2 = self.layer2(torch.cat((hidden_state, o, coarse_pr, coarse_uas, coarse_vas), 1))
+        hidden_state3 = self.layer3(hidden_state2)
+        # todo maybe add in the boundary conditions again at this point
+        hidden_state4 = self.layer4(torch.cat((hidden_state3, orog), 1))
+        hidden_state5 = self.layer5(hidden_state4)
 
-        return hidden_state4
+        return hidden_state5

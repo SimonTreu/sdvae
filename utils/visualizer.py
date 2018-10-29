@@ -17,6 +17,7 @@ class Visualizer:
         self.n_batches = n_batches
         self.csv_name = os.path.join('checkpoints', opt.name, 'loss.csv')
         self.csv_epoch_name = os.path.join('checkpoints', opt.name, 'loss_epoch.csv')
+        self.fine_size = opt.fine_size
         util.mkdir(self.image_path)
         if opt.load_epoch < 0:
             with open(self.csv_name, "w") as log_csv:
@@ -34,9 +35,9 @@ class Visualizer:
         fig, axes = plt.subplots(2, self.n_images, sharex='col', sharey='row')
         rand_idx = np.random.randint(0, self.opt.batch_size, self.n_images)
         for i in range(self.n_images):
-            axes[0, i].imshow(fine_pr[rand_idx[i]].view(8, 8).cpu().detach().numpy(), vmin=vmin, vmax=vmax,
+            axes[0, i].imshow(fine_pr[rand_idx[i]].view(self.fine_size, self.fine_size).cpu().detach().numpy(), vmin=vmin, vmax=vmax,
                               cmap=plt.get_cmap('jet'))
-            axes[1, i].imshow(recon_pr[rand_idx[i]].view(8, 8).cpu().detach().numpy(), vmin=vmin, vmax=vmax,
+            axes[1, i].imshow(recon_pr[rand_idx[i]].view(self.fine_size, self.fine_size).cpu().detach().numpy(), vmin=vmin, vmax=vmax,
                               cmap=plt.get_cmap('jet'))
 
         axes[0, 0].set_title('Original Precipitation')
