@@ -6,14 +6,15 @@ from netCDF4 import Dataset
 
 
 class BaseOptions:
+    # todo base_options, train_options, val options
     def __init__(self):
         self.parser = argparse.ArgumentParser()
         self.parser.add_argument('--name', type=str, default='vae_08_30')
         self.parser.add_argument('--dataroot', type=str, default="data/wind",
                                  help="path to images (should have subfolders trainA, trainB, valA, valB, etc)")
         self.parser.add_argument('--phase', type=str, default="train", help="train, val, test, etc")
-        self.parser.add_argument('--fine_size', type=int, default=8,
-                                 help="number of high-resolution grid cells within one coarse resolution cell")
+        self.parser.add_argument('--fine_size', type=int, default=32,
+                                 help="size (in number of high resolution pixels)")
         self.parser.add_argument('--batch_size', type=int, default=124, help='input batch size')
         self.parser.add_argument('--no_shuffle', action='store_true',
                                  help='if specified, do not shuffle the input data for batches')
@@ -43,6 +44,8 @@ class BaseOptions:
                                  help='number of filters in first conv layer ov encoder')
         self.parser.add_argument('--load_epoch', type=int, default=-1,
                                  help="if >= 0 load a pretrained model at the defined epoch")
+        self.parser.add_argument('--scale_factor', type=int, default=8,
+                                 help="the scale factor defines by which factor the spacial resolution is increased")
 
     def parse(self):
         opt = self.parser.parse_args()
@@ -96,18 +99,7 @@ class BaseOptions:
         if len(opt.gpu_ids) > 0:
             torch.cuda.set_device(opt.gpu_ids[0])
 
-        # load normalization values
-        with Dataset(os.path.join(opt.dataroot, "stats", "mean.nc4"), "r", format="NETCDF4") as rootgrp:
-            mean_pr = float(rootgrp.variables['pr'][:])
-            mean_orog = float(rootgrp.variables['orog'][:])
-
-        with Dataset(os.path.join(opt.dataroot, "stats", "std.nc4"), "r", format="NETCDF4") as rootgrp:
-            std_pr = float(rootgrp.variables['pr'][:])
-            std_orog = float(rootgrp.variables['orog'][:])
-
-        opt.mean_std = {'mean_pr': mean_pr, 'std_pr': std_pr,
-                        'mean_orog': mean_orog, 'std_orog': std_orog}
-
-        opt.threshold = (0 - opt.mean_std['mean_pr']) / opt.mean_std['std_pr']
+        with Dataset(os.path.join(opt.dataroot, "threshold.nc4"), "r", format="NETCDF4") as rootgrp:
+            opt.threshold = float(rootgrp['pr'][0])
 
         return opt
