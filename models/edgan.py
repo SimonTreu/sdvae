@@ -46,7 +46,7 @@ class Edgan(nn.Module):
                              kernel_size=3, padding=0, stride=1))
 
         self.decode = Decoder(nz=self.nz, no=self.no, threshold=threshold,
-                              hidden_depth=opt.decoder_hidden_depth)
+                              hidden_depth=opt.decoder_hidden_depth, scale_factor=opt.scale_factor)
 
         if self.no > 0:
             self.encode_orog = nn.Sequential(nn.Conv2d(in_channels=1,out_channels=self.no*2,
@@ -111,11 +111,12 @@ class Edgan(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, nz, no, threshold, hidden_depth):
+    def __init__(self, nz, no, threshold, hidden_depth, scale_factor):
         super(Decoder, self).__init__()
         self.nz = nz
         self.no = no
         self.hidden_depth = hidden_depth
+        self.scale_factor = scale_factor
 
 
         # todo skip connections
@@ -127,14 +128,14 @@ class Decoder(nn.Module):
                                     nn.ReLU())
         # todo put 3 (uas+vas+coarse_pr) to some variable
         self.layer2 = nn.Sequential(nn.ConvTranspose2d(in_channels=hidden_depth+self.no+3,
-                                                       out_channels=hidden_depth * 2, kernel_size=5,
-                                                       stride=2, padding=0),
+                                                       out_channels=hidden_depth * 2, kernel_size=3,
+                                                       stride=3, padding=1),
                                     nn.ReLU())
-        self.layer3 = nn.Sequential(nn.ConvTranspose2d(in_channels=hidden_depth * 2,
+        self.layer3 = nn.Sequential(nn.ConvTranspose2d(in_channels=hidden_depth * 2+1,
                                                        out_channels=hidden_depth * 2, kernel_size=4,
-                                                       stride=2, padding=0),
+                                                       stride=2, padding=1),
                                     nn.ReLU())
-        self.layer4 = nn.Sequential(nn.Conv2d(in_channels=hidden_depth * 2+1, out_channels=hidden_depth * 4,
+        self.layer4 = nn.Sequential(nn.Conv2d(in_channels=hidden_depth * 2+2, out_channels=hidden_depth * 4,
                                               kernel_size=3, stride=1, padding=1),
                                     nn.ReLU())
 
@@ -151,9 +152,16 @@ class Decoder(nn.Module):
         else:
             hidden_state = self.layer1(z)
             hidden_state2 = self.layer2(torch.cat((hidden_state, o, coarse_pr, coarse_uas, coarse_vas), 1))
-        hidden_state3 = self.layer3(hidden_state2)
-        # todo maybe add in the boundary conditions again at this point
-        hidden_state4 = self.layer4(torch.cat((hidden_state3, orog), 1))
+
+        upsample2 = torch.nn.Upsample(scale_factor=self.scale_factor//2, mode='nearest')
+        coarse_pr_1 = upsample2(coarse_pr[:, :, 1:-1, 1:-1])
+
+        hidden_state3 = self.layer3(torch.cat((hidden_state2, coarse_pr_1),1))
+
+        upsample2 = torch.nn.Upsample(scale_factor=self.scale_factor, mode='nearest')
+        coarse_pr_2 = upsample2(coarse_pr[:, :, 1:-1, 1:-1])
+
+        hidden_state4 = self.layer4(torch.cat((hidden_state3, orog, coarse_pr_2), 1))
         hidden_state5 = self.layer5(hidden_state4)
 
         return hidden_state5
