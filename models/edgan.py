@@ -96,7 +96,7 @@ class Edgan(nn.Module):
             return mu
 
     def loss_function(self, recon_x, x, mu, log_var, coarse_pr):
-        mse = nn.functional.mse_loss(recon_x, x, size_average=False)
+        mse = nn.functional.mse_loss(recon_x, x, size_average=True)
         # see Appendix B from VAE paper:
         #Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
         # https://arxiv.org/abs/1312.6114
@@ -105,7 +105,7 @@ class Edgan(nn.Module):
         # cycle loss as mean squared error
         coarse_recon = self.upscaler.upscale(recon_x)
         coarse_pr = coarse_pr[:,:,1:-1,1:-1]
-        cycle_loss = torch.sum(torch.abs(coarse_pr.contiguous().view(-1).sub(coarse_recon.view(-1)))) * self.lambda_cycle_l1
+        cycle_loss = torch.sum(torch.abs(coarse_pr.contiguous().view(-1).sub(coarse_recon.view(-1)))).div(coarse_pr.shape[-1]*coarse_pr.shape[-2]) * self.lambda_cycle_l1
 
         return mse, kld, cycle_loss, mse + kld + cycle_loss
 
@@ -115,7 +115,7 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         self.nz = nz
         self.no = no
-        self.hidden_depth = hidden_depth
+        self.hidden_depth = hidden_depth #todo rename hidden_depth
         self.scale_factor = scale_factor
 
 
@@ -135,11 +135,13 @@ class Decoder(nn.Module):
                                                        out_channels=hidden_depth * 2, kernel_size=4,
                                                        stride=2, padding=1),
                                     nn.ReLU())
-        self.layer4 = nn.Sequential(nn.Conv2d(in_channels=hidden_depth * 2+2, out_channels=hidden_depth * 4,
+        self.layer4 = nn.Sequential(nn.Conv2d(in_channels=hidden_depth * 2+2, out_channels=hidden_depth * 2,
                                               kernel_size=3, stride=1, padding=1),
                                     nn.ReLU())
 
-        self.layer5 = nn.Sequential(nn.Conv2d(in_channels=hidden_depth * 4, out_channels=1,
+        # layer 4 cannot be the output layer to enable a nonlinear relationship with topography
+
+        self.layer5 = nn.Sequential(nn.Conv2d(in_channels=hidden_depth * 2, out_channels=1,
                                               kernel_size=3, stride=1, padding=1),
                                     nn.Threshold(value=threshold, threshold=threshold))
 

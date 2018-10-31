@@ -79,6 +79,12 @@ for input_dataset_path in nc4_sample_paths:
         downscaled_pr.long_name += '_downscaled'
         downscaled_pr.comment = 'downscaled ' + downscaled_pr.comment
 
+    bilinear_upscaled_pr = output_dataset.createVariable('bilinear_downscaled_pr', output_dataset['pr'].datatype,
+                                                      output_dataset['pr'].dimensions)
+    bilinear_upscaled_pr.setncatts({k: output_dataset['pr'].getncattr(k) for k in output_dataset['pr'].ncattrs()})
+    bilinear_upscaled_pr.standard_name += '_bilinear_downscaled'
+    bilinear_upscaled_pr.long_name += '_bilinear_downscaled'
+    bilinear_upscaled_pr.comment = 'bilinear_downscaled ' + bilinear_upscaled_pr.comment
     # set variable values
     for var in ['lat', 'lon']:
         output_dataset[var][:] = input_dataset[var][:]
@@ -118,6 +124,12 @@ for input_dataset_path in nc4_sample_paths:
                                               coarse_vas=coarse_vas, orog=orog_tensor)
 
             output_dataset['downscaled_pr_{}'.format(k)][t, opt.scale_factor:-opt.scale_factor, opt.scale_factor:-opt.scale_factor] = recon_pr
+
+        upsample = torch.nn.Upsample(scale_factor=opt.scale_factor, mode='bilinear')
+        # todo align_corners=True?
+        # todo upsample the complete image and then take only the necessary part
+        bilinear_pr = upsample(coarse_pr[:, :, 1:-1, 1:-1])
+        output_dataset['bilinear_downscaled_pr'][t, opt.scale_factor:-opt.scale_factor, opt.scale_factor:-opt.scale_factor] = bilinear_pr
 
     # read out the variables
     # create reanalysis result (croped to 32*32)

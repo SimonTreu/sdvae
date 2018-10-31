@@ -31,10 +31,10 @@ class BaseOptions:
                                  help='number of iterations until the next logging of cost values')
         self.parser.add_argument('--plot_interval', type=int, default=1000000,
                                  help='number of iterations until the next plotting of training results')
-        self.parser.add_argument('--lambda_cycle_l1', type=int, default=1000,
+        self.parser.add_argument('--lambda_cycle_l1', type=float, default=1000,
                                  help='factor to be multiplied with the reconstruction loss '
                                       '(|coarse(reconstructed fine resolution) - coarse input|)')
-        self.parser.add_argument('--lambda_kl', type=int, default=1,
+        self.parser.add_argument('--lambda_kl', type=float, default=1,
                                  help='factor to be multiplied KL loss term')
         self.parser.add_argument('--lr', type=float, default=1e-3, help='learning rate for optimizer')
         self.parser.add_argument('--save_interval', type=int, default=1, help='every _ epoch the model is saved')
