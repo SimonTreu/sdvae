@@ -1,47 +1,40 @@
 from torch.utils.data import Dataset
 import os.path
 import torch
-from random import randint
+import random
 import time
 from utils.upscale import Upscale
 from netCDF4 import Dataset as Nc4Dataset
 
 
-TORCH_EXTENSION = [
-    '.pt'
-]
-
-
-# Dataset implementation
 class ClimateDataset(Dataset):
     def __init__(self, opt):
         self.root = opt.dataroot
         self.scale_factor = opt.scale_factor
         self.fine_size = opt.fine_size
+        n_test = opt.n_test
+        n_val = opt.n_val
+        # cell size is the size of one cell that is extracted from the netcdf file. Afterwards this
+        # is croped to fine_size
         self.cell_size = opt.fine_size + self.scale_factor
         with Nc4Dataset(os.path.join(self.root, "dataset.nc4"), "r", format="NETCDF4") as file:
+            check_dimensions(file, self.cell_size, self.scale_factor)
             times = file['time'].size
-        # Number of 40x40 lat lon cells without test and validation cells * number of times
-        self.length = (18-4)*3*times
+            cols = file['lon'].size//self.cell_size
+            rows = file['lat'].size//self.cell_size
+            self.length = rows*(cols-n_test-n_val)*times
         self.upscaler = Upscale(size=self.fine_size+2*self.scale_factor, scale_factor=self.scale_factor)
 
         # remove 4 40 boxes to create a training set for each block of 40 rows
-        self.lat_lon_train = [[i for i in range(18)] for j in range(3)]
+        self.lat_lon_train = [[i for i in range(cols)] for _ in range(rows)]
+        self.test_val_indices = create_test_and_val_indices(rows, cols, n_test, n_val, seed=opt.seed)
+
+        #remove_test_sets(self.lat_lon_train)
+        #remove_val_sets(self.lat_lon_train)
         # lat = 30 deg north
-        self.lat_lon_train[0].remove(6)   # test
-        self.lat_lon_train[0].remove(10)  # test
-        self.lat_lon_train[0].remove(15)  # val
-        self.lat_lon_train[0].remove(16)  # val
-        # lat = 10 deg north
-        self.lat_lon_train[1].remove(0)   # test
-        self.lat_lon_train[1].remove(4)   # test
-        self.lat_lon_train[1].remove(12)  # val
-        self.lat_lon_train[1].remove(14)  # val
-        # lat = -10 deg north
-        self.lat_lon_train[2].remove(1)   # test
-        self.lat_lon_train[2].remove(7)   # test
-        self.lat_lon_train[2].remove(10)  # val
-        self.lat_lon_train[2].remove(13)  # val
+        self.lat_lon_train = [[self.lat_lon_train[i][j] for j in range(cols) if j not in self.test_val_indices[i]]
+                              for i in range(rows)]
+        # todo also use that in val
 
     def __len__(self):
         return self.length
@@ -58,8 +51,8 @@ class ClimateDataset(Dataset):
         lon = index % s_lon
 
         # calculate a random offset from the upper left corner to crop the box
-        w_offset = randint(0, self.scale_factor-1)  # calculate a random offset from the upper left corner to crop the box
-        h_offset = randint(0, self.scale_factor-1)
+        w_offset = random.randint(0, self.scale_factor-1)  # calculate a random offset from the upper left corner to crop the box
+        h_offset = random.randint(0, self.scale_factor-1)
 
         # add scale factor because first 8 pixels are only for boundary conditions --> for lat=0 the index in the netcdf file is 8.
         anchor_lat = lat * self.cell_size + w_offset + self.scale_factor
@@ -98,3 +91,16 @@ class ClimateDataset(Dataset):
         return {'fine_pr': fine_pr, 'coarse_pr': coarse_pr,
                 'orog': orog, 'coarse_uas': coarse_uas, 'coarse_vas': coarse_vas,
                 'time': end_time}
+
+
+def check_dimensions(file, cell_size, scale_factor):
+    if file['lat'].size % cell_size != 2*scale_factor:
+        raise ValueError("Input file dim(lat) must be a multiple of the cell_size + 2*scale_factor "
+                         "for the boundary conditions")
+
+
+def create_test_and_val_indices(rows, cols, n_test, n_val, seed):
+    rand = random.Random()
+    rand.seed(seed)
+    test_val_indices = [rand.sample([i for i in range(cols)], n_val+n_test) for _ in range(rows)]
+    return test_val_indices

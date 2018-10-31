@@ -50,6 +50,11 @@ class BaseOptions:
                                          help="number of downscaled samples created for each cell in test")
         self.parser.add_argument('--results_dir', type=str, default='./results/', help='saves results here.')
         self.parser.add_argument('--no_orog', action='store_true', help="if specified, don't use topography")
+        self.parser.add_argument('--n_test', type=int, default=2, help="n test sets in one cell_sized row of lats")
+        self.parser.add_argument('--n_val', type=int, default=2, help="n val sets in one cell_sized row of lats")
+        self.parser.add_argument('--seed', type=int, default=0, help="seed value for selection of test sets. "
+                                                                     "With a different seed,"
+                                                                     "different test sets are created")
 
 
     def parse(self):
