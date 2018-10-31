@@ -17,7 +17,7 @@ class ClimateDataset(Dataset):
     def __init__(self, opt):
         self.root = opt.dataroot
         self.scale_factor = opt.scale_factor
-        self.fine_size = opt.fine_size  # todo fix in option
+        self.fine_size = opt.fine_size
         self.cell_size = opt.fine_size + self.scale_factor
         with Nc4Dataset(os.path.join(self.root, "dataset.nc4"), "r", format="NETCDF4") as file:
             times = file['time'].size
@@ -75,8 +75,6 @@ class ClimateDataset(Dataset):
         with Nc4Dataset(os.path.join(self.root, "dataset.nc4"), "r", format="NETCDF4") as file:
             pr = torch.tensor(file['pr'][t, boundary_lats, boundary_lons], dtype=torch.float)
             orog = torch.tensor(file['orog'][lats, lons],  dtype=torch.float)
-            cell_area = torch.ones_like(orog)
-            # todo cell_area should no more be necessary
             uas = torch.tensor(file['uas'][t, boundary_lats, boundary_lons], dtype=torch.float)
             vas = torch.tensor(file['vas'][t, boundary_lats, boundary_lons], dtype=torch.float)
 
@@ -100,21 +98,3 @@ class ClimateDataset(Dataset):
         return {'fine_pr': fine_pr, 'coarse_pr': coarse_pr,
                 'orog': orog, 'coarse_uas': coarse_uas, 'coarse_vas': coarse_vas,
                 'time': end_time}
-
-# Helper Methods
-# todo remove helper methods here
-def is_torch_file(filename):
-    return any(filename.endswith(extension) for extension in TORCH_EXTENSION)
-
-
-def get_sample_files(sample_dir):
-    cells = []
-    assert os.path.isdir(sample_dir), '%s is not a valid directory' % sample_dir
-
-    for root, _, fnames in sorted(os.walk(sample_dir)):
-        for fname in fnames:
-            if is_torch_file(fname):
-                path = os.path.join(root, fname)
-                cells.append(path)
-
-    return cells

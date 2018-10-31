@@ -14,39 +14,39 @@ class Edgan(nn.Module):
         self.input_size = opt.fine_size ** 2
         self.upscaler = Upscale(size=opt.fine_size, scale_factor=8, device=device)
 
-        d_hidden = opt.d_hidden
+        nf_encoder = opt.nf_encoder
         threshold = opt.threshold
 
         # todo also enable removing orog
         # todo in_channels should be a variable
-        self.h_layer1 = nn.Sequential(nn.Conv2d(in_channels=2, out_channels=d_hidden,
+        self.h_layer1 = nn.Sequential(nn.Conv2d(in_channels=2, out_channels=nf_encoder,
                                   kernel_size=3, padding=1, stride=1),
-                        nn.BatchNorm2d(d_hidden),
+                        nn.BatchNorm2d(nf_encoder),
                         nn.ReLU(),
                         nn.MaxPool2d(kernel_size=2))
 
-        self.h_layer2 = nn.Sequential(nn.Conv2d(in_channels=d_hidden, out_channels=d_hidden*2,
+        self.h_layer2 = nn.Sequential(nn.Conv2d(in_channels=nf_encoder, out_channels=nf_encoder*2,
                                   kernel_size=4, padding=0, stride=1),
-                        nn.BatchNorm2d(d_hidden*2),
+                        nn.BatchNorm2d(nf_encoder*2),
                         nn.ReLU(),
                         nn.MaxPool2d(kernel_size=2))
         # todo 3 is uas, vas + coarse_pr and should be a variable
-        self.h_layer3 = nn.Sequential(nn.Conv2d(in_channels=2*d_hidden+3, out_channels=d_hidden*3,
+        self.h_layer3 = nn.Sequential(nn.Conv2d(in_channels=2*nf_encoder+3, out_channels=nf_encoder*3,
                                   kernel_size=3, padding=1, stride=1),
-                        nn.BatchNorm2d(d_hidden*3),
+                        nn.BatchNorm2d(nf_encoder*3),
                         nn.ReLU(),
                         nn.MaxPool2d(kernel_size=2))
 
         # mu
-        self.mu = nn.Sequential(nn.Conv2d(in_channels=3*d_hidden, out_channels=self.nz,
+        self.mu = nn.Sequential(nn.Conv2d(in_channels=3*nf_encoder, out_channels=self.nz,
                         kernel_size=3, padding=0, stride=1))
 
         # log_var
-        self.log_var = nn.Sequential(nn.Conv2d(in_channels=3*d_hidden, out_channels=self.nz,
+        self.log_var = nn.Sequential(nn.Conv2d(in_channels=3*nf_encoder, out_channels=self.nz,
                              kernel_size=3, padding=0, stride=1))
 
         self.decode = Decoder(nz=self.nz, no=self.no, threshold=threshold,
-                              hidden_depth=opt.decoder_hidden_depth, scale_factor=opt.scale_factor)
+                              nf_decoder=opt.nf_decoder, scale_factor=opt.scale_factor)
 
         if self.no > 0:
             self.encode_orog = nn.Sequential(nn.Conv2d(in_channels=1,out_channels=self.no*2,
@@ -78,7 +78,6 @@ class Edgan(nn.Module):
         if self.no > 0:
             o = self.encode_orog(orog)
             o2 = self.encode_orog_2(orog)
-            # todo fix decoder
             return self.decode(z=z, coarse_pr=coarse_pr,
                                orog=orog, coarse_uas=coarse_uas, coarse_vas=coarse_vas,
                                o=o, o2=o2), mu.view(-1, self.nz), log_var.view(-1, self.nz)
@@ -111,37 +110,36 @@ class Edgan(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, nz, no, threshold, hidden_depth, scale_factor):
+    def __init__(self, nz, no, threshold, nf_decoder, scale_factor):
         super(Decoder, self).__init__()
         self.nz = nz
         self.no = no
-        self.hidden_depth = hidden_depth #todo rename hidden_depth
+        self.nf_decoder = nf_decoder
         self.scale_factor = scale_factor
 
 
-        # todo skip connections
         # todo dropout or BatchNorm
 
         self.layer1 = nn.Sequential(nn.ConvTranspose2d(in_channels=self.nz,
-                                                       out_channels=hidden_depth,
+                                                       out_channels=nf_decoder,
                                                        kernel_size=6, stride=1, padding=0),
                                     nn.ReLU())
         # todo put 3 (uas+vas+coarse_pr) to some variable
-        self.layer2 = nn.Sequential(nn.ConvTranspose2d(in_channels=hidden_depth+self.no+3,
-                                                       out_channels=hidden_depth * 2, kernel_size=3,
+        self.layer2 = nn.Sequential(nn.ConvTranspose2d(in_channels=nf_decoder + self.no + 3,
+                                                       out_channels=nf_decoder * 2, kernel_size=3,
                                                        stride=3, padding=1),
                                     nn.ReLU())
-        self.layer3 = nn.Sequential(nn.ConvTranspose2d(in_channels=hidden_depth * 2+1,
-                                                       out_channels=hidden_depth * 2, kernel_size=4,
+        self.layer3 = nn.Sequential(nn.ConvTranspose2d(in_channels=nf_decoder * 2 + 1,
+                                                       out_channels=nf_decoder * 2, kernel_size=4,
                                                        stride=2, padding=1),
                                     nn.ReLU())
-        self.layer4 = nn.Sequential(nn.Conv2d(in_channels=hidden_depth * 2+2, out_channels=hidden_depth * 2,
+        self.layer4 = nn.Sequential(nn.Conv2d(in_channels=nf_decoder * 2 + 2, out_channels=nf_decoder * 2,
                                               kernel_size=3, stride=1, padding=1),
                                     nn.ReLU())
 
         # layer 4 cannot be the output layer to enable a nonlinear relationship with topography
 
-        self.layer5 = nn.Sequential(nn.Conv2d(in_channels=hidden_depth * 2, out_channels=1,
+        self.layer5 = nn.Sequential(nn.Conv2d(in_channels=nf_decoder * 2, out_channels=1,
                                               kernel_size=3, stride=1, padding=1),
                                     nn.Threshold(value=threshold, threshold=threshold))
 

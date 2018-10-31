@@ -6,7 +6,6 @@ from netCDF4 import Dataset
 
 
 class BaseOptions:
-    # todo base_options, train_options, val options
     def __init__(self):
         self.parser = argparse.ArgumentParser()
         self.parser.add_argument('--name', type=str, default='vae_08_30')
@@ -39,10 +38,10 @@ class BaseOptions:
         self.parser.add_argument('--lr', type=float, default=1e-3, help='learning rate for optimizer')
         self.parser.add_argument('--save_interval', type=int, default=1, help='every _ epoch the model is saved')
         self.parser.add_argument('--save_latest_interval', type=int, default=100, help='every _ iteration the model is saved')
-        self.parser.add_argument('--d_hidden', type=int, default=4,
-                                 help='number of filters in first conv layer ov encoder')
-        self.parser.add_argument('--decoder_hidden_depth', type=int, default=16,
-                                 help='number of filters in first conv layer ov encoder')
+        self.parser.add_argument('--nf_encoder', type=int, default=16,
+                                 help='number of filters in first conv layer of encoder')
+        self.parser.add_argument('--nf_decoder', type=int, default=16,
+                                 help='number of filters in first conv layer of decoder')
         self.parser.add_argument('--load_epoch', type=int, default=-1,
                                  help="if >= 0 load a pretrained model at the defined epoch")
         self.parser.add_argument('--scale_factor', type=int, default=8,
