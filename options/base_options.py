@@ -49,6 +49,7 @@ class BaseOptions:
         self.parser.add_argument('--n_samples', type=int, default=3,
                                          help="number of downscaled samples created for each cell in test")
         self.parser.add_argument('--results_dir', type=str, default='./results/', help='saves results here.')
+        self.parser.add_argument('--no_orog', action='store_true', help="if specified, don't use topography")
 
 
     def parse(self):

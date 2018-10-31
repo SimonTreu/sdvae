@@ -13,13 +13,13 @@ class Edgan(nn.Module):
         self.lambda_kl = opt.lambda_kl
         self.input_size = opt.fine_size ** 2
         self.upscaler = Upscale(size=opt.fine_size, scale_factor=8, device=device)
+        self.use_orog = not opt.no_orog
 
         nf_encoder = opt.nf_encoder
         threshold = opt.threshold
 
         # todo also enable removing orog
-        # todo in_channels should be a variable
-        self.h_layer1 = nn.Sequential(nn.Conv2d(in_channels=2, out_channels=nf_encoder,
+        self.h_layer1 = nn.Sequential(nn.Conv2d(in_channels=1+self.use_orog, out_channels=nf_encoder,
                                   kernel_size=3, padding=1, stride=1),
                         nn.BatchNorm2d(nf_encoder),
                         nn.ReLU(),
@@ -45,10 +45,10 @@ class Edgan(nn.Module):
         self.log_var = nn.Sequential(nn.Conv2d(in_channels=3*nf_encoder, out_channels=self.nz,
                              kernel_size=3, padding=0, stride=1))
 
-        self.decode = Decoder(nz=self.nz, no=self.no, threshold=threshold,
-                              nf_decoder=opt.nf_decoder, scale_factor=opt.scale_factor)
+        self.decode = Decoder(opt)
 
         if self.no > 0:
+            # todo fix this part
             self.encode_orog = nn.Sequential(nn.Conv2d(in_channels=1,out_channels=self.no*2,
                                                        kernel_size=3, padding=1, stride=1),
                                              nn.BatchNorm2d(self.no*2),
@@ -66,8 +66,11 @@ class Edgan(nn.Module):
                           )
 
     def forward(self, fine_pr, coarse_pr, orog, coarse_uas, coarse_vas):
-        h_layer1 = self.h_layer1(torch.cat((fine_pr, orog),1)) # shape = n_batch,n_channels, 6,6
-        h_layer2 = self.h_layer2(h_layer1) # shape = n_batch,n_channels, 6,6
+        if self.use_orog:
+            h_layer1 = self.h_layer1(torch.cat((fine_pr, orog),1))
+        else:
+            h_layer1 = self.h_layer1(fine_pr)
+        h_layer2 = self.h_layer2(h_layer1)
         h_layer3 = self.h_layer3(torch.cat((h_layer2, coarse_pr, coarse_uas, coarse_vas), 1))
 
         mu = self.mu(h_layer3)
@@ -110,12 +113,13 @@ class Edgan(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, nz, no, threshold, nf_decoder, scale_factor):
+    def __init__(self, opt):
         super(Decoder, self).__init__()
-        self.nz = nz
-        self.no = no
-        self.nf_decoder = nf_decoder
-        self.scale_factor = scale_factor
+        self.nz = opt.nz
+        self.no = opt.no
+        nf_decoder = opt.nf_decoder
+        self.scale_factor = opt.scale_factor
+        self.use_orog = not opt.no_orog
 
 
         # todo dropout or BatchNorm
@@ -133,15 +137,15 @@ class Decoder(nn.Module):
                                                        out_channels=nf_decoder * 2, kernel_size=4,
                                                        stride=2, padding=1),
                                     nn.ReLU())
-        self.layer4 = nn.Sequential(nn.Conv2d(in_channels=nf_decoder * 2 + 2, out_channels=nf_decoder * 2,
+        self.layer4 = nn.Sequential(nn.Conv2d(in_channels=nf_decoder * 2 + 1 + self.use_orog, out_channels=nf_decoder * 2,
                                               kernel_size=3, stride=1, padding=1),
                                     nn.ReLU())
 
         # layer 4 cannot be the output layer to enable a nonlinear relationship with topography
 
-        self.layer5 = nn.Sequential(nn.Conv2d(in_channels=nf_decoder * 2, out_channels=1,
-                                              kernel_size=3, stride=1, padding=1),
-                                    nn.Threshold(value=threshold, threshold=threshold))
+        self.output_layer = nn.Sequential(nn.Conv2d(in_channels=nf_decoder * 2, out_channels=1,
+                                                    kernel_size=3, stride=1, padding=1),
+                                          nn.Threshold(value=opt.threshold, threshold=opt.threshold))
 
     def forward(self, z, coarse_pr,
                 coarse_uas, coarse_vas, orog,
@@ -153,15 +157,18 @@ class Decoder(nn.Module):
             hidden_state = self.layer1(z)
             hidden_state2 = self.layer2(torch.cat((hidden_state, o, coarse_pr, coarse_uas, coarse_vas), 1))
 
-        upsample2 = torch.nn.Upsample(scale_factor=self.scale_factor//2, mode='nearest')
-        coarse_pr_1 = upsample2(coarse_pr[:, :, 1:-1, 1:-1])
+        upsample1 = torch.nn.Upsample(scale_factor=self.scale_factor//2, mode='nearest')
+        coarse_pr_1 = upsample1(coarse_pr[:, :, 1:-1, 1:-1])
 
         hidden_state3 = self.layer3(torch.cat((hidden_state2, coarse_pr_1),1))
 
         upsample2 = torch.nn.Upsample(scale_factor=self.scale_factor, mode='nearest')
         coarse_pr_2 = upsample2(coarse_pr[:, :, 1:-1, 1:-1])
 
-        hidden_state4 = self.layer4(torch.cat((hidden_state3, orog, coarse_pr_2), 1))
-        hidden_state5 = self.layer5(hidden_state4)
+        if self.use_orog:
+            hidden_state4 = self.layer4(torch.cat((hidden_state3, orog, coarse_pr_2), 1))
+        else:
+            hidden_state4 = self.layer4(torch.cat((hidden_state3, coarse_pr_2), 1))
+        output = self.output_layer(hidden_state4)
 
-        return hidden_state5
+        return output
