@@ -112,7 +112,7 @@ class Edgan(nn.Module):
         loss = torch.zeros_like(mse)
         if self.lambda_mse != 0:
             mse *= self.lambda_mse
-            loss += mse * self.lambda_mse
+            loss += mse
         if self.lambda_kl != 0:
             kld *= self.lambda_kl
             loss += kld
