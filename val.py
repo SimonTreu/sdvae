@@ -30,15 +30,13 @@ climate_data_loader = DataLoader(climate_data,
 
 # load the model
 edgan_model = Edgan(opt=opt, device=device).to(device)
-initial_epoch = 0
-if opt.load_epoch >= 0:
-    save_name = "epoch_{}.pth".format(opt.load_epoch)
-    save_dir = os.path.join(save_root, save_name)
-    edgan_model.load_state_dict(torch.load(save_dir))
-    initial_epoch = opt.load_epoch + 1
+
+save_name = "epoch_{}.pth".format(opt.load_epoch)
+save_dir = os.path.join(save_root, save_name)
+edgan_model.load_state_dict(torch.load(save_dir))
 
 # Iterate the netcdf files and plot reconstructed images.
-nc4_sample_paths = [os.path.join(opt.dataroot, 'test.0.6.nc4')] # todo make it properly
+nc4_sample_paths = [os.path.join(opt.dataroot, 'test.0.12.nc4')] # todo make it properly
 
 outdir = os.path.join(opt.results_dir, opt.name, '%s_%s' % (opt.phase, opt.load_epoch))
 if not os.path.exists(outdir):
