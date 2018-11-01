@@ -66,8 +66,7 @@ class Visualizer:
                    cycle_loss,
                    loss,
                    iter_time,
-                   iter_data_time,
-                   load_time]
+                   iter_data_time]
             csv_writer.writerow(row)
 
     def print_epoch(self, epoch, epoch_mse, epoch_kld, epoch_cycle_loss, epoch_loss, epoch_time):
