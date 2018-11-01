@@ -45,7 +45,9 @@ class BaseOptions:
         self.parser.add_argument('--nf_decoder', type=int, default=16,
                                  help='number of filters in first conv layer of decoder')
         self.parser.add_argument('--load_epoch', type=int, default=-1,
-                                 help="if >= 0 load a pretrained model at the defined epoch")
+                                 help="if >= 0 load a pre-trained model at the defined epoch, "
+                                      "if -1 and training start a new model"
+                                      "if -1 and val/test load latest model")
         self.parser.add_argument('--scale_factor', type=int, default=8,
                                  help="the scale factor defines by which factor the spacial resolution is increased")
         self.parser.add_argument('--n_samples', type=int, default=3,
