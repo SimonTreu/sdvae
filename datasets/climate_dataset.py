@@ -12,8 +12,8 @@ class ClimateDataset(Dataset):
         self.root = opt.dataroot
         self.scale_factor = opt.scale_factor
         self.fine_size = opt.fine_size
-        n_test = opt.n_test
-        n_val = opt.n_val
+        self.n_test = opt.n_test
+        self.n_val = opt.n_val
         # cell size is the size of one cell that is extracted from the netcdf file. Afterwards this
         # is cropped to fine_size
         self.cell_size = opt.fine_size + self.scale_factor
@@ -21,17 +21,16 @@ class ClimateDataset(Dataset):
             check_dimensions(file, self.cell_size, self.scale_factor)
             times = file['time'].size
             cols = file['lon'].size//self.cell_size
-            rows = file['lat'].size//self.cell_size
-            self.length = rows*(cols-n_test-n_val)*times
+            self.rows = file['lat'].size//self.cell_size
+            self.length = self.rows*(cols-self.n_test-self.n_val)*times
         self.upscaler = Upscale(size=self.fine_size+2*self.scale_factor, scale_factor=self.scale_factor)
 
-        self.lat_lon_train = [[i for i in range(cols)] for _ in range(rows)]
+        self.lat_lon_train = [[i for i in range(cols)] for _ in range(self.rows)]
 
         # remove 4 40 boxes to create a training set for each block of 40 rows
-        self.test_val_indices = create_test_and_val_indices(rows, cols, n_test, n_val, seed=opt.seed)
+        self.test_val_indices = create_test_and_val_indices(self.rows, cols, self.n_test, self.n_val, seed=opt.seed)
         self.lat_lon_train = [[self.lat_lon_train[i][j] for j in range(cols) if j not in self.test_val_indices[i]]
-                              for i in range(rows)]
-        # todo also use that in val
+                              for i in range(self.rows)]
 
     def __len__(self):
         return self.length
