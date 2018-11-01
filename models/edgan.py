@@ -11,6 +11,7 @@ class Edgan(nn.Module):
         self.no = opt.no # size of encoded orography
         self.lambda_cycle_l1 = opt.lambda_cycle_l1
         self.lambda_kl = opt.lambda_kl
+        self.lambda_mse = opt.lambda_mse
         self.input_size = opt.fine_size ** 2
         self.upscaler = Upscale(size=opt.fine_size, scale_factor=8, device=device)
         self.use_orog = not opt.no_orog
@@ -98,18 +99,24 @@ class Edgan(nn.Module):
             return mu
 
     def loss_function(self, recon_x, x, mu, log_var, coarse_pr):
-        mse = nn.functional.mse_loss(recon_x, x, size_average=True)
+        mse = nn.functional.mse_loss(recon_x, x, size_average=True) * self.lambda_mse
         # see Appendix B from VAE paper:
         #Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
         # https://arxiv.org/abs/1312.6114
         # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
-        kld = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp()) * self.lambda_kl
-        # cycle loss as mean squared error
+        # kld is devided with nz to normalize the kld values
+        kld = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())/self.nz * self.lambda_kl
         coarse_recon = self.upscaler.upscale(recon_x)
         coarse_pr = coarse_pr[:,:,1:-1,1:-1]
-        cycle_loss = torch.sum(torch.abs(coarse_pr.contiguous().view(-1).sub(coarse_recon.view(-1)))).div(coarse_pr.shape[-1]*coarse_pr.shape[-2]) * self.lambda_cycle_l1
-
-        return mse, kld, cycle_loss, mse + kld + cycle_loss
+        cycle_loss = nn.functional.mse_loss(coarse_pr, coarse_recon, size_average=True) * self.lambda_cycle_l1
+        loss = torch.zeros_like(mse)
+        if self.lambda_mse != 0:
+            loss += mse
+        if self.lambda_kl != 0:
+            loss += kld
+        if self.lambda_cycle_l1 != 0:
+            loss += cycle_loss
+        return mse, kld, cycle_loss, loss
 
 
 class Decoder(nn.Module):
@@ -122,23 +129,27 @@ class Decoder(nn.Module):
         self.use_orog = not opt.no_orog
 
 
-        # todo dropout or BatchNorm
+        # todo dropout
 
         self.layer1 = nn.Sequential(nn.ConvTranspose2d(in_channels=self.nz,
                                                        out_channels=nf_decoder,
                                                        kernel_size=6, stride=1, padding=0),
+                                    nn.BatchNorm2d(nf_decoder),
                                     nn.ReLU())
         # todo put 3 (uas+vas+coarse_pr) to some variable
         self.layer2 = nn.Sequential(nn.ConvTranspose2d(in_channels=nf_decoder + self.no + 3,
                                                        out_channels=nf_decoder * 2, kernel_size=3,
                                                        stride=3, padding=1),
+                                    nn.BatchNorm2d(nf_decoder*2),
                                     nn.ReLU())
         self.layer3 = nn.Sequential(nn.ConvTranspose2d(in_channels=nf_decoder * 2 + 1,
                                                        out_channels=nf_decoder * 2, kernel_size=4,
                                                        stride=2, padding=1),
+                                    nn.BatchNorm2d(nf_decoder*2),
                                     nn.ReLU())
         self.layer4 = nn.Sequential(nn.Conv2d(in_channels=nf_decoder * 2 + 1 + self.use_orog, out_channels=nf_decoder * 2,
                                               kernel_size=3, stride=1, padding=1),
+                                    nn.BatchNorm2d(nf_decoder*2),
                                     nn.ReLU())
 
         # layer 4 cannot be the output layer to enable a nonlinear relationship with topography

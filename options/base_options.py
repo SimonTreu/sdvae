@@ -34,7 +34,9 @@ class BaseOptions:
                                  help='factor to be multiplied with the reconstruction loss '
                                       '(|coarse(reconstructed fine resolution) - coarse input|)')
         self.parser.add_argument('--lambda_kl', type=float, default=1,
-                                 help='factor to be multiplied KL loss term')
+                                 help='factor to be multiplied with the KL loss term')
+        self.parser.add_argument('--lambda_mse', type=float, default=1,
+                                 help='factor to be multiplied with the MSE loss term')
         self.parser.add_argument('--lr', type=float, default=1e-3, help='learning rate for optimizer')
         self.parser.add_argument('--save_interval', type=int, default=1, help='every _ epoch the model is saved')
         self.parser.add_argument('--save_latest_interval', type=int, default=100, help='every _ iteration the model is saved')
