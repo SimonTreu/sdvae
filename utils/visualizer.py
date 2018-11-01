@@ -51,20 +51,20 @@ class Visualizer:
                epoch, batch_idx * self.opt.batch_size, self.training_size,
                100. * batch_idx / self.n_batches,
                '',
-               mse.item() / self.opt.batch_size,
-               kld.item() / self.opt.batch_size,
-               cycle_loss.item() / self.opt.batch_size,
-               loss.item() / self.opt.batch_size,
+               mse,
+               kld,
+               cycle_loss,
+               loss,
                iter_time,
                iter_data_time))
         # csv title: 'epoch', 'iters', 'mse', 'kl', 'cycle', 'total', 'iter_time', 'iter_data_time'
         with open(self.csv_name, "a") as log_csv:
             csv_writer = csv.writer(log_csv, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             row = [epoch, batch_idx,
-                   mse.item() / self.opt.batch_size,
-                   kld.item() / self.opt.batch_size,
-                   cycle_loss.item() / self.opt.batch_size,
-                   loss.item() / self.opt.batch_size,
+                   mse,
+                   kld,
+                   cycle_loss,
+                   loss,
                    iter_time,
                    iter_data_time,
                    load_time]

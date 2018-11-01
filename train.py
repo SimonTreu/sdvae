@@ -60,6 +60,10 @@ def main():
             iter_data_start_time = time.time()
             iter_data_time = 0
             iter_time = 0
+            interval_mse = []
+            interval_kld = []
+            interval_cycle_loss = []
+            interval_loss = []
             for batch_idx, data in enumerate(climate_data_loader, 0):
                 iter_start_time = time.time()
                 fine_pr = data['fine_pr'].to(device)
@@ -74,7 +78,11 @@ def main():
                 mse, kld, cycle_loss, loss = edgan_model.loss_function(recon_pr, fine_pr, mu, log_var,
                                                                        coarse_pr)
                 loss.backward()
-
+                # todo refactor this part
+                interval_mse += [mse.item()]
+                interval_kld += [kld.item()]
+                interval_cycle_loss += [cycle_loss.item()]
+                interval_loss += [loss.item()]
                 epoch_mse += mse.item()
                 epoch_kld += kld.item()
                 epoch_cycle_loss += cycle_loss.item()
@@ -84,10 +92,15 @@ def main():
                 iter_data_time += iter_start_time-iter_data_start_time
 
                 if batch_idx % opt.log_interval == 0:
-                    viz.print(epoch, batch_idx, mse, kld, cycle_loss, loss, iter_time,
+                    viz.print(epoch, batch_idx, sum(interval_mse)/len(interval_mse), sum(interval_kld)/len(interval_kld),
+                              sum(interval_cycle_loss)/len(interval_cycle_loss), sum(interval_loss)/len(interval_loss), iter_time,
                               iter_data_time, sum(data['time']).item())
                     iter_data_time = 0
                     iter_time = 0
+                    interval_mse = []
+                    interval_kld = []
+                    interval_cycle_loss = []
+                    interval_loss = []
                 if batch_idx % opt.plot_interval == 0:
                     img_id += 1
                     image_name = "Epoch{}_Image{}.jpg".format(epoch, img_id)
@@ -96,8 +109,8 @@ def main():
                     save('latest', save_root, opt.gpu_ids, edgan_model)
                 iter_data_start_time = time.time()
 
-        if epoch % opt.save_interval == 0:
-            save(epoch, save_root, opt.gpu_ids, edgan_model)
+            if epoch % opt.save_interval == 0:
+                save(epoch, save_root, opt.gpu_ids, edgan_model)
         epoch_time = time.time() - epoch_start_time
         viz.print_epoch(epoch=epoch, epoch_mse=epoch_mse,
                         epoch_kld=epoch_kld, epoch_cycle_loss=epoch_cycle_loss,
