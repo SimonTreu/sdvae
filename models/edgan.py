@@ -99,22 +99,25 @@ class Edgan(nn.Module):
             return mu
 
     def loss_function(self, recon_x, x, mu, log_var, coarse_pr):
-        mse = nn.functional.mse_loss(recon_x, x, size_average=True) * self.lambda_mse
+        mse = nn.functional.mse_loss(recon_x, x, size_average=True)
         # see Appendix B from VAE paper:
         #Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
         # https://arxiv.org/abs/1312.6114
         # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
         # kld is devided with nz to normalize the kld values
-        kld = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())/self.nz * self.lambda_kl
+        kld = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())/self.nz
         coarse_recon = self.upscaler.upscale(recon_x)
         coarse_pr = coarse_pr[:,:,1:-1,1:-1]
-        cycle_loss = nn.functional.mse_loss(coarse_pr, coarse_recon, size_average=True) * self.lambda_cycle_l1
+        cycle_loss = nn.functional.mse_loss(coarse_pr, coarse_recon, size_average=True)
         loss = torch.zeros_like(mse)
         if self.lambda_mse != 0:
-            loss += mse
+            mse *= self.lambda_mse
+            loss += mse * self.lambda_mse
         if self.lambda_kl != 0:
+            kld *= self.lambda_kl
             loss += kld
         if self.lambda_cycle_l1 != 0:
+            cycle_loss *= self.lambda_cycle_l1
             loss += cycle_loss
         return mse, kld, cycle_loss, loss
 
