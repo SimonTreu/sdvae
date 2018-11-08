@@ -111,12 +111,11 @@ class ValidationViz:
 
         r = np.random.randint(len(climate_data))
         self.orog = climate_data[r]['orog'].unsqueeze(0)
+        self.uas = climate_data[r]['uas'].unsqueeze(0)
+        self.vas = climate_data[r]['vas'].unsqueeze(0)
 
-        im = edgan_model.get_picture(latent=torch.Tensor(norm.ppf(z)), coarse_precipitation=coarse_pr,
-                                     coarse_ul=coarse_pr, coarse_u=coarse_pr, coarse_ur=coarse_pr,
-                                     coarse_l=coarse_pr, coarse_r=coarse_pr,
-                                     coarse_bl=coarse_pr, coarse_b=coarse_pr,coarse_br=coarse_pr,
-                                     orog=self.orog)
+        im = edgan_model.decode(z=torch.Tensor(norm.ppf(z)), coarse_pr=coarse_pr,
+                               orog=self.orog, coarse_uas=self.uas, coarse_vas=self.coarse_vas)
         img_in_plot = plt.imshow(im.detach().numpy(), origin='lower',
                                  cmap=plt.get_cmap('jet'), vmin=self.vmin, vmax=self.vmax)
         self.orog_in_plot = plt.contour(self.orog.view(8, 8))
