@@ -137,7 +137,7 @@ def main():
             # save them in result dataset
             output_dataset.close()
             index += 1
-        input_dataset.close()
+    input_dataset.close()
 
 
 if __name__=='__main__':
