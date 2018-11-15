@@ -89,6 +89,36 @@ class Edgan(nn.Module):
             return self.decode(z=z, coarse_pr=coarse_pr,
                                orog=orog, coarse_uas=coarse_uas, coarse_vas=coarse_vas
                                ), mu.view(-1, self.nz), log_var.view(-1, self.nz)
+        '''
+        self.decode(z=self.reparameterize(torch.zeros_like(mu), torch.zeros_like(mu)), coarse_pr=coarse_pr,
+                               orog=orog, coarse_uas=coarse_uas, coarse_vas=coarse_vas
+                               ).detach().numpy()[0,0,:,:]
+                               
+        fine_pr.numpy()[0,0,:,:]
+        
+        mu.detach().numpy()[0,:,0,0]
+        
+import matplotlib.pyplot as plt
+import numpy as np
+
+vmin = -1.08
+vmax = 20
+fig, axes = plt.subplots(3, 5, sharex='col', sharey='row')
+for i in range(5):
+    axes[0, i].imshow(fine_pr.numpy()[0,0,:,:], vmin=vmin, vmax=vmax, cmap=plt.get_cmap('jet'))
+    axes[1, i].imshow(self.decode(z=self.reparameterize(
+        mu, log_var), coarse_pr=coarse_pr,orog=orog,
+        coarse_uas=coarse_uas, coarse_vas=coarse_vas).detach().numpy()[0,0,:,:],
+                      vmin=vmin, vmax=vmax, cmap=plt.get_cmap('jet'))
+    axes[2, i].imshow(self.decode(z=self.reparameterize(
+        torch.zeros_like(mu), torch.zeros_like(mu)), coarse_pr=coarse_pr,orog=orog,
+        coarse_uas=coarse_uas, coarse_vas=coarse_vas).detach().numpy()[0,0,:,:],
+                      vmin=vmin, vmax=vmax, cmap=plt.get_cmap('jet'))
+axes[0, 0].set_title('Original Precipitation')
+axes[1, 0].set_title('Reconstructed with encoded latent vector Precipitation')
+axes[2, 0].set_title('Reconstructed Precipitation')
+plt.show()
+        '''
 
     def reparameterize(self, mu, log_var):
         if self.training:
@@ -98,14 +128,14 @@ class Edgan(nn.Module):
         else:
             return mu
 
-    def loss_function(self, recon_x, x, mu, log_var, coarse_pr):
+    def loss_function(self, recon_x, x, mu, log_var, coarse_pr, lambda_kl):
         mse = nn.functional.mse_loss(recon_x, x, size_average=True)
         # see Appendix B from VAE paper:
         #Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
         # https://arxiv.org/abs/1312.6114
         # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
         # kld is devided with nz to normalize the kld values
-        kld = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())/self.nz
+        kld = -0.5 * torch.mean(1 + log_var - mu.pow(2) - log_var.exp())
         coarse_recon = self.upscaler.upscale(recon_x)
         coarse_pr = coarse_pr[:,:,1:-1,1:-1]
         cycle_loss = nn.functional.mse_loss(coarse_pr, coarse_recon, size_average=True)
@@ -114,7 +144,7 @@ class Edgan(nn.Module):
             mse *= self.lambda_mse
             loss += mse
         if self.lambda_kl != 0:
-            kld *= self.lambda_kl
+            kld *= lambda_kl
             loss += kld
         if self.lambda_cycle_l1 != 0:
             cycle_loss *= self.lambda_cycle_l1

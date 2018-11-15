@@ -33,7 +33,7 @@ class BaseOptions:
         self.parser.add_argument('--lambda_cycle_l1', type=float, default=1000,
                                  help='factor to be multiplied with the reconstruction loss '
                                       '(|coarse(reconstructed fine resolution) - coarse input|)')
-        self.parser.add_argument('--lambda_kl', type=float, default=1,
+        self.parser.add_argument('--lambda_kl', type=float, default=1e-4,
                                  help='factor to be multiplied with the KL loss term')
         self.parser.add_argument('--lambda_mse', type=float, default=1,
                                  help='factor to be multiplied with the MSE loss term')

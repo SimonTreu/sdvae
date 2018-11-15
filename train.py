@@ -49,6 +49,7 @@ def main():
         optimizer = torch.optim.Adam(edgan_model.parameters(), lr=opt.lr)
         viz = Visualizer(opt, n_images=5, training_size=len(climate_data_loader.dataset), n_batches=len(climate_data_loader))
 
+        lambda_kl = 0
         for epoch_idx in range(opt.n_epochs):
             epoch_start_time = time.time()
             epoch = initial_epoch + epoch_idx
@@ -76,7 +77,7 @@ def main():
                 recon_pr, mu, log_var = edgan_model(fine_pr=fine_pr, coarse_pr=coarse_pr,
                                                     orog=orog, coarse_uas=coarse_uas, coarse_vas=coarse_vas)
                 mse, kld, cycle_loss, loss = edgan_model.loss_function(recon_pr, fine_pr, mu, log_var,
-                                                                       coarse_pr)
+                                                                       coarse_pr, lambda_kl)
                 loss.backward()
                 # todo refactor this part
                 interval_mse += [mse.item()]
@@ -90,7 +91,9 @@ def main():
                 optimizer.step()
                 iter_time += time.time()-iter_start_time
                 iter_data_time += iter_start_time-iter_data_start_time
-
+                if batch_idx % 400 == 0:
+                    lambda_kl += opt.lambda_kl
+                    print("lambda_kl = {}".format(lambda_kl))
                 if batch_idx % opt.log_interval == 0:
                     viz.print(epoch, batch_idx, sum(interval_mse)/len(interval_mse), sum(interval_kld)/len(interval_kld),
                               sum(interval_cycle_loss)/len(interval_cycle_loss), sum(interval_loss)/len(interval_loss), iter_time,
@@ -105,8 +108,9 @@ def main():
                     img_id += 1
                     image_name = "Epoch{}_Image{}.jpg".format(epoch, img_id)
                     viz.plot(fine_pr=fine_pr, recon_pr=recon_pr, image_name=image_name)
-                if batch_idx % opt.save_latest_interval:
+                if batch_idx % opt.save_latest_interval == 0:
                     save('latest', save_root, opt.gpu_ids, edgan_model)
+                    print('saved latest epoch after {} iterations'.format(batch_idx))
                 iter_data_start_time = time.time()
 
             if epoch % opt.save_interval == 0:
