@@ -108,11 +108,11 @@ def main():
 
             times = pr.shape[0]
             for t in range(times):
-                pr_tensor = torch.Tensor(pr[t, :, :])
-                orog_tensor = torch.Tensor(orog[opt.scale_factor:-opt.scale_factor,
-                                           opt.scale_factor:-opt.scale_factor]).unsqueeze(0).unsqueeze(0)
-                uas_tensor = torch.Tensor(uas[t, :, :])
-                vas_tensor = torch.Tensor(vas[t, :, :])
+                pr_tensor = torch.tensor(pr[t, :, :], device=device)
+                orog_tensor = torch.tensor(orog[opt.scale_factor:-opt.scale_factor,
+                                           opt.scale_factor:-opt.scale_factor], device=device).unsqueeze(0).unsqueeze(0)
+                uas_tensor = torch.tensor(uas[t, :, :], device=device)
+                vas_tensor = torch.tensor(vas[t, :, :], device=device)
 
                 coarse_pr = upscaler.upscale(pr_tensor).unsqueeze(0).unsqueeze(0)
                 coarse_uas = upscaler.upscale(uas_tensor).unsqueeze(0).unsqueeze(0)
