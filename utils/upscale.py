@@ -18,4 +18,4 @@ class Upscale:
             if not n == self.size:
                 raise ValueError("val must be a square matrix "
                                  "shape=({0}, {0}). But shape is {1}".format(self.size, val.shape))
-        return torch.matmul(torch.matmul(self.s, val), torch.t(self.s))/self.scale_factor**2
+        return torch.matmul(torch.matmul(self.s, val), self.s.t())/self.scale_factor**2
