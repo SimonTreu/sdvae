@@ -13,8 +13,8 @@ def main():
     # set variables, create directories
     opt = BaseOptions().parse()
     n_samples = opt.n_samples
-    upscaler = Upscale(size=opt.fine_size+2*opt.scale_factor, scale_factor=opt.scale_factor)
     device = torch.device("cuda" if len(opt.gpu_ids) > 0 else "cpu")
+    upscaler = Upscale(size=opt.fine_size+2*opt.scale_factor, scale_factor=opt.scale_factor, device=device)
     load_root = os.path.join('checkpoints', opt.name)
     load_epoch = opt.load_epoch if opt.load_epoch >= 0 else 'latest'
     load_name = "epoch_{}.pth".format(load_epoch)
