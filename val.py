@@ -109,6 +109,7 @@ def main():
             times = pr.shape[0]
             for t in range(times):
                 pr_tensor = torch.tensor(pr[t, :, :], device=device)
+                print('device={}, pr_tensor.device={}'.format(device, pr_tensor.device))
                 orog_tensor = torch.tensor(orog[opt.scale_factor:-opt.scale_factor,
                                            opt.scale_factor:-opt.scale_factor], device=device).unsqueeze(0).unsqueeze(0)
                 uas_tensor = torch.tensor(uas[t, :, :], device=device)
