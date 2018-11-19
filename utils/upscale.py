@@ -19,5 +19,5 @@ class Upscale:
             if not n == self.size:
                 raise ValueError("val must be a square matrix "
                                  "shape=({0}, {0}). But shape is {1}".format(self.size, val.shape))
-        print('s.device={}, s.t.device={}'.format(self.s.device, self.s.t().device))
+        print('val.device={}, s.device={}, s.t.device={}'.format(val.device, self.s.device, self.s.t().device))
         return torch.matmul(torch.matmul(self.s, val), self.s.t())/self.scale_factor**2
