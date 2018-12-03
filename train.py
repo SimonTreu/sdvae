@@ -1,6 +1,7 @@
 from datasets.climate_dataset import ClimateDataset
 from torch.utils.data import DataLoader
 from models.edgan import Edgan
+from models.gamma_vae import GammaVae
 from utils.visualizer import Visualizer
 
 import torch
@@ -35,18 +36,24 @@ def main():
                                      num_workers=int(opt.n_threads))
 
     # load the model
-    edgan_model = Edgan(opt=opt, device=device).to(device)
+    if opt.model == "mse_vae":
+        model = Edgan(opt=opt, device=device).to(device)
+    elif opt.model == "gamma_vae":
+        model = GammaVae(opt=opt, device=device).to(device)
+    else:
+        raise ValueError("model {} is not implemented".format(opt.model))
+
     initial_epoch = 0
     if opt.load_epoch >= 0:
         save_name = "epoch_{}.pth".format(opt.load_epoch)
         save_dir = os.path.join(save_root, save_name)
-        edgan_model.load_state_dict(torch.load(save_dir))
+        model.load_state_dict(torch.load(save_dir))
         initial_epoch = opt.load_epoch + 1
 
     if opt.phase == 'train':
         # get optimizer
-        edgan_model.train()
-        optimizer = torch.optim.Adam(edgan_model.parameters(), lr=opt.lr)
+        model.train()
+        optimizer = torch.optim.Adam(model.parameters(), lr=opt.lr)
         viz = Visualizer(opt, n_images=5, training_size=len(climate_data_loader.dataset), n_batches=len(climate_data_loader))
 
         lambda_kl = 0
@@ -74,10 +81,20 @@ def main():
                 orog = data['orog'].to(device)
 
                 optimizer.zero_grad()
-                recon_pr, mu, log_var = edgan_model(fine_pr=fine_pr, coarse_pr=coarse_pr,
-                                                    orog=orog, coarse_uas=coarse_uas, coarse_vas=coarse_vas)
-                mse, kld, cycle_loss, loss = edgan_model.loss_function(recon_pr, fine_pr, mu, log_var,
-                                                                       coarse_pr, lambda_kl)
+
+                if opt.model == "mse_vae":
+                    recon_pr, mu, log_var = model(fine_pr=fine_pr, coarse_pr=coarse_pr,
+                                                  orog=orog, coarse_uas=coarse_uas, coarse_vas=coarse_vas)
+                    mse, kld, cycle_loss, loss = model.loss_function(recon_pr, fine_pr, mu, log_var,
+                                                                     coarse_pr, lambda_kl)
+                elif opt.model == "gamma_vae":
+                    p, alpha, beta, mu, log_var = model(fine_pr=fine_pr, coarse_pr=coarse_pr,
+                                                  orog=orog, coarse_uas=coarse_uas, coarse_vas=coarse_vas)
+                    mse, kld, cycle_loss, loss = model.loss_function(p, alpha, beta, fine_pr, mu, log_var,
+                                                                     coarse_pr, lambda_kl)
+                else:
+                    raise ValueError("model {} is not implemented".format(opt.model))
+
                 loss.backward()
                 # todo refactor this part
                 interval_mse += [mse.item()]
@@ -104,17 +121,17 @@ def main():
                     interval_kld = []
                     interval_cycle_loss = []
                     interval_loss = []
-                if batch_idx % opt.plot_interval == 0:
+                if False:#batch_idx % opt.plot_interval == 0: #todo fix plotting
                     img_id += 1
                     image_name = "Epoch{}_Image{}.jpg".format(epoch, img_id)
                     viz.plot(fine_pr=fine_pr, recon_pr=recon_pr, image_name=image_name)
                 if batch_idx % opt.save_latest_interval == 0:
-                    save('latest', save_root, opt.gpu_ids, edgan_model)
+                    save('latest', save_root, opt.gpu_ids, model)
                     print('saved latest epoch after {} iterations'.format(batch_idx))
                 iter_data_start_time = time.time()
 
             if epoch % opt.save_interval == 0:
-                save(epoch, save_root, opt.gpu_ids, edgan_model)
+                save(epoch, save_root, opt.gpu_ids, model)
         epoch_time = time.time() - epoch_start_time
         viz.print_epoch(epoch=epoch, epoch_mse=epoch_mse,
                         epoch_kld=epoch_kld, epoch_cycle_loss=epoch_cycle_loss,

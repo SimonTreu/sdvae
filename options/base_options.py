@@ -59,6 +59,8 @@ class BaseOptions:
         self.parser.add_argument('--seed', type=int, default=0, help="seed value for selection of test sets. "
                                                                      "With a different seed,"
                                                                      "different test sets are created")
+        self.parser.add_argument('--model', type=str, default='mse_vae', help="which model to use. Available options are"
+                                                                              " 'mse_vae' and 'gamma_vae")
 
 
     def parse(self):
@@ -113,7 +115,8 @@ class BaseOptions:
         if len(opt.gpu_ids) > 0:
             torch.cuda.set_device(opt.gpu_ids[0])
 
-        with Dataset(os.path.join(opt.dataroot, "threshold.nc4"), "r", format="NETCDF4") as rootgrp:
-            opt.threshold = float(rootgrp['pr'][0])
+        if opt.model == "mse_vae":
+            with Dataset(os.path.join(opt.dataroot, "threshold.nc4"), "r", format="NETCDF4") as rootgrp:
+                opt.threshold = float(rootgrp['pr'][0])
 
         return opt
