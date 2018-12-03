@@ -136,11 +136,7 @@ plt.show()
         if self.lambda_mse != 0:
             nlpd *= self.lambda_mse
             loss += nlpd
-        if self.lambda_kl != 0:
-            kld *= lambda_kl
-            loss += kld
-        if loss <= 1000.:
-            pass
+        loss += kld*lambda_kl
         return nlpd, kld, cycle_loss, loss
 
     def _neg_log_gamma_likelihood(self, x, alpha, beta, p):

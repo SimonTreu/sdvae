@@ -62,10 +62,11 @@ class BaseOptions:
         self.parser.add_argument('--model', type=str, default='mse_vae', help="which model to use. Available options are"
                                                                               " 'mse_vae' and 'gamma_vae")
 
-
-    def parse(self):
-        opt = self.parser.parse_args()
-
+    def parse(self, args=None):
+        if args:
+            opt = self.parser.parse_args(args)
+        else:
+            opt = self.parser.parse_args()
         # plot selected options
         args = vars(opt)
         print('------------ Options -------------')

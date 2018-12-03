@@ -7,6 +7,7 @@ from options.base_options import BaseOptions
 from datasets.climate_dataset import ClimateDataset
 from utils.upscale import Upscale
 from models.edgan import Edgan
+from models.gamma_vae import GammaVae
 
 
 def main():
@@ -23,12 +24,19 @@ def main():
     if not os.path.exists(outdir):
         os.makedirs(outdir)
     climate_data = ClimateDataset(opt=opt)
-    boundary_size = opt.fine_size + 2*opt.scale_factor
-    # todo rename, maybe large_cell and small_cell and cell , 48, 32, 40
+
+    # large_cell = 48x48, cell = 40x40, small_cell = 32x32
+    large_cell = opt.fine_size + 2*opt.scale_factor
 
     # load the model
-    edgan_model = Edgan(opt=opt, device=device).to(device)
-    edgan_model.load_state_dict(torch.load(load_dir))
+    if opt.model == "mse_vae":
+        model = Edgan(opt=opt, device=device).to(device)
+        model.load_state_dict(torch.load(load_dir))
+    elif opt.model == "gamma_vae":
+        model = GammaVae(opt=opt, device=device).to(device)
+        model.load_state_dict(torch.load(load_dir))
+    else:
+        raise ValueError("model {} is not implemented".format(opt.model))
 
     # Iterate val cells and compute #n_samples reconstructions.
     # todo seperate val and test
@@ -41,11 +49,11 @@ def main():
             anchor_lat = idx_lat * climate_data.cell_size  + climate_data.scale_factor
             anchor_lon = idx_lon * climate_data.cell_size
             # select indices for a 48 x 48 box around the 32 x 32 box to be downscaled (with boundary values)
-            boundary_lats = [i for i in
-                             range(anchor_lat - climate_data.scale_factor,
-                                   anchor_lat + climate_data.fine_size + climate_data.scale_factor)]
+            large_cell_lats = [i for i in
+                               range(anchor_lat - climate_data.scale_factor,
+                                     anchor_lat + climate_data.fine_size + climate_data.scale_factor)]
             # longitudes might cross the prime meridian
-            boundary_lons = [i % 720
+            large_cell_lons = [i % 720
                              for i in
                              range(anchor_lon - climate_data.scale_factor,
                                    anchor_lon + climate_data.fine_size + climate_data.scale_factor)]
@@ -62,8 +70,8 @@ def main():
             output_dataset.history = datetime.date.today().isoformat() + " Added Downscaled images in python with pix2pix-edgan\n" + output_dataset.history
 
             output_dataset.createDimension("time", None)
-            output_dataset.createDimension("lon", boundary_size)
-            output_dataset.createDimension("lat", boundary_size)
+            output_dataset.createDimension("lon", large_cell)
+            output_dataset.createDimension("lat", large_cell)
 
             # Copy variables
             for v_name, varin in input_dataset.variables.items():
@@ -86,18 +94,18 @@ def main():
             bilinear_upscaled_pr.long_name += '_bilinear_downscaled'
             bilinear_upscaled_pr.comment = 'bilinear_downscaled ' + bilinear_upscaled_pr.comment
             # set variable values
-            output_dataset['lat'][:] = input_dataset['lat'][boundary_lats]
-            output_dataset['lon'][:] = input_dataset['lon'][boundary_lons]
+            output_dataset['lat'][:] = input_dataset['lat'][large_cell_lats]
+            output_dataset['lon'][:] = input_dataset['lon'][large_cell_lons]
             output_dataset['time'][:] = input_dataset['time'][:]
             # crop to 32x32
 
-            output_dataset['orog'][:] = input_dataset['orog'][boundary_lats, boundary_lons]
-            output_dataset['pr'][:] = input_dataset['pr'][:, boundary_lats, boundary_lons]
+            output_dataset['orog'][:] = input_dataset['orog'][large_cell_lats, large_cell_lons]
+            output_dataset['pr'][:] = input_dataset['pr'][:, large_cell_lats, large_cell_lons]
             for k in range(n_samples):
-                output_dataset['downscaled_pr_{}'.format(k)][:] = input_dataset['pr'][:, boundary_lats, boundary_lons]
+                output_dataset['downscaled_pr_{}'.format(k)][:] = input_dataset['pr'][:, large_cell_lats, large_cell_lons]
 
-            output_dataset['uas'][:] = input_dataset['uas'][:, boundary_lats, boundary_lons]
-            output_dataset['vas'][:] = input_dataset['vas'][:, boundary_lats, boundary_lons]
+            output_dataset['uas'][:] = input_dataset['uas'][:, large_cell_lats, large_cell_lons]
+            output_dataset['vas'][:] = input_dataset['vas'][:, large_cell_lats, large_cell_lons]
 
             # read out the variables similar to construct_datasets.py
             pr = output_dataset['pr'][:]
@@ -117,13 +125,28 @@ def main():
                 coarse_pr = upscaler.upscale(pr_tensor).unsqueeze(0).unsqueeze(0)
                 coarse_uas = upscaler.upscale(uas_tensor).unsqueeze(0).unsqueeze(0)
                 coarse_vas = upscaler.upscale(vas_tensor).unsqueeze(0).unsqueeze(0)
-                for k in range(n_samples):
-                    with torch.no_grad():
-                        recon_pr = edgan_model.decode(z=torch.randn(1, opt.nz, 1, 1, device=device),
-                                                      coarse_pr=coarse_pr,coarse_uas=coarse_uas,
-                                                      coarse_vas=coarse_vas, orog=orog_tensor)
 
-                    output_dataset['downscaled_pr_{}'.format(k)][t, opt.scale_factor:-opt.scale_factor, opt.scale_factor:-opt.scale_factor] = recon_pr
+                if opt.model == "mse_vae":
+                    for k in range(n_samples):
+                        with torch.no_grad():
+                            recon_pr = model.decode(z=torch.randn(1, opt.nz, 1, 1, device=device),
+                                                    coarse_pr=coarse_pr, coarse_uas=coarse_uas,
+                                                    coarse_vas=coarse_vas, orog=orog_tensor)
+
+                        output_dataset['downscaled_pr_{}'.format(k)][t, opt.scale_factor:-opt.scale_factor,
+                        opt.scale_factor:-opt.scale_factor] = recon_pr
+                elif opt.model == "gamma_vae":
+                    for k in range(n_samples):
+                        with torch.no_grad():
+                            p, alpha, beta = model.decode(z=torch.randn(1, opt.nz, 1, 1, device=device),
+                                                    coarse_pr=coarse_pr, coarse_uas=coarse_uas,
+                                                    coarse_vas=coarse_vas, orog=orog_tensor)
+
+                        output_dataset['downscaled_pr_{}'.format(k)][t, opt.scale_factor:-opt.scale_factor,
+                        opt.scale_factor:-opt.scale_factor] = p*alpha*beta  # Expected value of the mixed gamma distribution
+                else:
+                    raise ValueError("model {} is not implemented".format(opt.model))
+
 
                 upsample = torch.nn.Upsample(scale_factor=opt.scale_factor, mode='bilinear')
                 # todo align_corners=True?

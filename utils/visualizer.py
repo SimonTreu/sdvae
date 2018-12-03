@@ -30,7 +30,7 @@ class Visualizer:
                 csv_writer.writerow(title)
 
     def plot(self, fine_pr, recon_pr, image_name):
-        vmin = self.opt.threshold
+        vmin = self.opt.threshold if self.opt.model == 'mse_vae' else 0
         vmax = 6
         fig, axes = plt.subplots(2, self.n_images, sharex='col', sharey='row')
         rand_idx = np.random.randint(0, self.opt.batch_size, self.n_images)
