@@ -23,19 +23,22 @@ class GammaVae(nn.Module):
                                                 kernel_size=3, padding=1, stride=1),
                                       nn.BatchNorm2d(nf_encoder),
                                       nn.ReLU(),
-                                      nn.MaxPool2d(kernel_size=2))
+                                      nn.MaxPool2d(kernel_size=2),
+                                      nn.Dropout(0.5))
 
         self.h_layer2 = nn.Sequential(nn.Conv2d(in_channels=nf_encoder, out_channels=nf_encoder * 2,
                                                 kernel_size=4, padding=0, stride=1),
                                       nn.BatchNorm2d(nf_encoder * 2),
                                       nn.ReLU(),
-                                      nn.MaxPool2d(kernel_size=2))
+                                      nn.MaxPool2d(kernel_size=2),
+                                      nn.Dropout(0.5))
         # todo 3 is uas, vas + coarse_pr and should be a variable
         self.h_layer3 = nn.Sequential(nn.Conv2d(in_channels=2 * nf_encoder + 3, out_channels=nf_encoder * 3,
                                                 kernel_size=3, padding=1, stride=1),
                                       nn.BatchNorm2d(nf_encoder * 3),
                                       nn.ReLU(),
-                                      nn.MaxPool2d(kernel_size=2))
+                                      nn.MaxPool2d(kernel_size=2),
+                                      nn.Dropout(0.5))
 
         # mu
         self.mu = nn.Sequential(nn.Conv2d(in_channels=3 * nf_encoder, out_channels=self.nz,
@@ -170,24 +173,28 @@ class Decoder(nn.Module):
                                                        out_channels=nf_decoder,
                                                        kernel_size=6, stride=1, padding=0),
                                     nn.BatchNorm2d(nf_decoder),
-                                    nn.ReLU())
+                                    nn.ReLU(),
+                                    nn.Dropout(0.5))
         # todo put 3 (uas+vas+coarse_pr) to some variable
         self.layer2 = nn.Sequential(nn.ConvTranspose2d(in_channels=nf_decoder + self.no + 3,
                                                        out_channels=nf_decoder * 2, kernel_size=3,
                                                        stride=3, padding=1),
                                     nn.BatchNorm2d(nf_decoder * 2),
-                                    nn.ReLU())
+                                    nn.ReLU(),
+                                    nn.Dropout(0.5))
         self.layer3 = nn.Sequential(nn.ConvTranspose2d(in_channels=nf_decoder * 2 + 1,
                                                        out_channels=nf_decoder * 2, kernel_size=4,
                                                        stride=2, padding=1),
                                     nn.BatchNorm2d(nf_decoder * 2),
-                                    nn.ReLU())
+                                    nn.ReLU(),
+                                    nn.Dropout(0.5))
 
         self.layer4 = nn.Sequential(
             nn.Conv2d(in_channels=nf_decoder * 2 + 1 + self.use_orog, out_channels=nf_decoder * 2,
                       kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(nf_decoder * 2),
-            nn.ReLU())
+            nn.ReLU(),
+            nn.Dropout(0.5))
 
         # layer 4 cannot be the output layer to enable a nonlinear relationship with topography
 
