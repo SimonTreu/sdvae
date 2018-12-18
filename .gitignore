@@ -3,5 +3,6 @@ jupyter/
 data/
 checkpoints/
 results/
+.ipynb_checkpoints
 *__pycache__
 *.pyc
