@@ -133,7 +133,7 @@ plt.show()
     def loss_function(self, p, alpha, beta, x, mu, log_var, coarse_pr, lambda_kl):
         # implement negative log predictive density
         nlpd = self._neg_log_gamma_likelihood(x, alpha, beta, p)
-        kld = -0.5 * torch.mean(1 + log_var - mu.pow(2) - log_var.exp())
+        kld = torch.mean(-0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp(),1))
         cycle_loss = torch.zeros_like(kld)
         loss = torch.zeros_like(kld)
         if self.lambda_mse != 0:
@@ -146,7 +146,7 @@ plt.show()
         # if y > 0:
         result = torch.zeros(1)
         if (x > 0).any():
-            result = - torch.mean(torch.log(p[x > 0])
+            result = - torch.sum(torch.log(p[x > 0])
                         + (alpha[x > 0] - 1) * torch.log(x[x > 0])
                         - alpha[x > 0] * torch.log(beta[x > 0])
                         - x[x > 0] / beta[x > 0]
@@ -154,8 +154,8 @@ plt.show()
                         )
         # if y = 0
         if (x == 0).any():
-            result -= torch.mean(torch.log(1 - p[x == 0]) + 0 * alpha[x == 0] + 0 * beta[x == 0])
-        return result
+            result -= torch.sum(torch.log(1 - p[x == 0]) + 0 * alpha[x == 0] + 0 * beta[x == 0])
+        return result/x.shape[0] # mean over batch size
 
 
 class Decoder(nn.Module):
@@ -173,28 +173,24 @@ class Decoder(nn.Module):
                                                        out_channels=nf_decoder,
                                                        kernel_size=6, stride=1, padding=0),
                                     nn.BatchNorm2d(nf_decoder),
-                                    nn.ReLU(),
-                                    nn.Dropout(0.5))
+                                    nn.ReLU())
         # todo put 3 (uas+vas+coarse_pr) to some variable
         self.layer2 = nn.Sequential(nn.ConvTranspose2d(in_channels=nf_decoder + self.no + 3,
                                                        out_channels=nf_decoder * 2, kernel_size=3,
                                                        stride=3, padding=1),
                                     nn.BatchNorm2d(nf_decoder * 2),
-                                    nn.ReLU(),
-                                    nn.Dropout(0.5))
+                                    nn.ReLU())
         self.layer3 = nn.Sequential(nn.ConvTranspose2d(in_channels=nf_decoder * 2 + 1,
                                                        out_channels=nf_decoder * 2, kernel_size=4,
                                                        stride=2, padding=1),
                                     nn.BatchNorm2d(nf_decoder * 2),
-                                    nn.ReLU(),
-                                    nn.Dropout(0.5))
+                                    nn.ReLU())
 
         self.layer4 = nn.Sequential(
             nn.Conv2d(in_channels=nf_decoder * 2 + 1 + self.use_orog, out_channels=nf_decoder * 2,
                       kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(nf_decoder * 2),
-            nn.ReLU(),
-            nn.Dropout(0.5))
+            nn.ReLU())
 
         # layer 4 cannot be the output layer to enable a nonlinear relationship with topography
 
@@ -227,7 +223,7 @@ class Decoder(nn.Module):
         coarse_pr_2 = upsample2(coarse_pr[:, :, 1:-1, 1:-1])
 
         if self.use_orog:
-            hidden_state4 = self.layer4(torch.cat((hidden_state3, orog, coarse_pr_2), 1))
+            hidden_state4 = self.layer4(torch.cat((hidden_state3, orog, coarse_pr_2), 1)) #todo try without
         else:
             hidden_state4 = self.layer4(torch.cat((hidden_state3, coarse_pr_2), 1))
         p = self.p_layer(hidden_state4)

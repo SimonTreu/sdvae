@@ -141,6 +141,17 @@ def main():
                 if batch_idx % opt.save_latest_interval == 0:
                     save('latest', save_root, opt.gpu_ids, model)
                     print('saved latest epoch after {} iterations'.format(batch_idx))
+
+                # todo add performance evaluation on valitation set periodically
+
+                #if batch_idx % opt.eval_val_loss == 0:
+                #    model.eval() # todo set model.train() above
+                #    val_climate_dataset.init_epoch() # todo implement val_climate_dataset
+                    #todo set all losses zero
+
+
+
+
                 iter_data_start_time = time.time()
 
             if epoch % opt.save_interval == 0:

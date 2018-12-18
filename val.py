@@ -31,10 +31,12 @@ def main():
     # load the model
     if opt.model == "mse_vae":
         model = Edgan(opt=opt, device=device).to(device)
-        model.load_state_dict(torch.load(load_dir))
+        model.load_state_dict(torch.load(load_dir, map_location='cpu'))
+        model.eval()
     elif opt.model == "gamma_vae":
         model = GammaVae(opt=opt, device=device).to(device)
-        model.load_state_dict(torch.load(load_dir))
+        model.load_state_dict(torch.load(load_dir, map_location='cpu'))
+        model.eval()
     else:
         raise ValueError("model {} is not implemented".format(opt.model))
 
@@ -133,8 +135,8 @@ def main():
                                                     coarse_pr=coarse_pr, coarse_uas=coarse_uas,
                                                     coarse_vas=coarse_vas, orog=orog_tensor)
 
-                        output_dataset['downscaled_pr_{}'.format(k)][t, opt.scale_factor:-opt.scale_factor,
-                        opt.scale_factor:-opt.scale_factor] = recon_pr
+                            output_dataset['downscaled_pr_{}'.format(k)][t, opt.scale_factor:-opt.scale_factor,
+                            opt.scale_factor:-opt.scale_factor] = recon_pr
                 elif opt.model == "gamma_vae":
                     for k in range(n_samples):
                         with torch.no_grad():
@@ -142,8 +144,8 @@ def main():
                                                     coarse_pr=coarse_pr, coarse_uas=coarse_uas,
                                                     coarse_vas=coarse_vas, orog=orog_tensor)
 
-                        output_dataset['downscaled_pr_{}'.format(k)][t, opt.scale_factor:-opt.scale_factor,
-                        opt.scale_factor:-opt.scale_factor] = p*alpha*beta  # Expected value of the mixed gamma distribution
+                            output_dataset['downscaled_pr_{}'.format(k)][t, opt.scale_factor:-opt.scale_factor,
+                            opt.scale_factor:-opt.scale_factor] = torch.nn.Threshold(0.01,0)(p*alpha*beta) #todo is this threshold reasonable?  # Expected value of the mixed gamma distribution
                 else:
                     raise ValueError("model {} is not implemented".format(opt.model))
 
