@@ -121,14 +121,14 @@ class Decoder(nn.Module):
                                                        stride=3, padding=1),
                                     nn.BatchNorm2d(nf_decoder * 2),
                                     nn.ReLU())
-        self.layer3 = nn.Sequential(nn.ConvTranspose2d(in_channels=nf_decoder * 2 + 1,
+        self.layer3 = nn.Sequential(nn.ConvTranspose2d(in_channels=nf_decoder * 2,
                                                        out_channels=nf_decoder * 2, kernel_size=4,
                                                        stride=2, padding=1),
                                     nn.BatchNorm2d(nf_decoder * 2),
                                     nn.ReLU())
 
         self.layer4 = nn.Sequential(
-            nn.Conv2d(in_channels=nf_decoder * 2 + 1 + self.use_orog, out_channels=nf_decoder * 2,
+            nn.Conv2d(in_channels=nf_decoder * 2 + self.use_orog, out_channels=nf_decoder * 2,
                       kernel_size=3, stride=1, padding=2),
             nn.BatchNorm2d(nf_decoder * 2),
             nn.ReLU())
@@ -151,18 +151,13 @@ class Decoder(nn.Module):
         hidden_state = self.layer1(z)
         hidden_state2 = self.layer2(torch.cat((hidden_state, coarse_pr, coarse_uas, coarse_vas), 1))
 
-        upsample1 = torch.nn.Upsample(scale_factor=self.scale_factor // 2, mode='nearest')
-        coarse_pr_1 = upsample1(coarse_pr[:, :, 1:-1, 1:-1]) # todo try if that is necessary
+        hidden_state3 = self.layer3(hidden_state2)
 
-        hidden_state3 = self.layer3(torch.cat((hidden_state2, coarse_pr_1), 1))
-
-        upsample2 = torch.nn.Upsample(scale_factor=self.scale_factor, mode='nearest')
-        coarse_pr_2 = upsample2(coarse_pr[:, :, 1:-1, 1:-1])
 
         if self.use_orog:
-            hidden_state4 = self.layer4(torch.cat((hidden_state3, orog, coarse_pr_2), 1)) #todo try without
+            hidden_state4 = self.layer4(torch.cat((hidden_state3, orog), 1)) #todo try without
         else:
-            hidden_state4 = self.layer4(torch.cat((hidden_state3, coarse_pr_2), 1))
+            hidden_state4 = self.layer4(hidden_state3)
         p = self.p_layer(hidden_state4)
         alpha = self.alpha_layer(hidden_state4)
         beta = self.beta_layer(hidden_state4)
