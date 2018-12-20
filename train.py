@@ -32,7 +32,7 @@ def main():
     climate_data = ClimateDataset(opt=opt)
     climate_data_loader = DataLoader(climate_data,
                                      batch_size=opt.batch_size,
-                                     shuffle=not opt.no_shuffle,
+                                     shuffle=True,
                                      num_workers=int(opt.n_threads))
 
     # load the model
@@ -56,10 +56,6 @@ def main():
         optimizer = torch.optim.Adam(model.parameters(), lr=opt.lr)
         viz = Visualizer(opt, n_images=5, training_size=len(climate_data_loader.dataset), n_batches=len(climate_data_loader))
 
-        lambda_kl = opt.lambda_kl
-        lambda_kl_update_interval = len(climate_data_loader)//20  # update after 5% of dataset is processed
-        lambda_kl_update_rate = (1-lambda_kl)/(20*opt.n_epochs)
-
         for epoch_idx in range(opt.n_epochs):
             epoch_start_time = time.time()
             epoch = initial_epoch + epoch_idx
@@ -76,9 +72,6 @@ def main():
             interval_cycle_loss = []
             interval_loss = []
             for batch_idx, data in enumerate(climate_data_loader, 0):
-                if batch_idx % lambda_kl_update_interval == 0 and batch_idx > 0:
-                    lambda_kl += lambda_kl_update_rate
-                    print("lambda_kl = {}".format(lambda_kl))
                 iter_start_time = time.time()
                 fine_pr = data['fine_pr'].to(device)
                 coarse_pr = data['coarse_pr'].to(device)

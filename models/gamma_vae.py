@@ -8,10 +8,6 @@ class GammaVae(nn.Module):
         super(GammaVae, self).__init__()
         # variables
         self.nz = opt.nz
-        self.no = opt.no  # size of encoded orography
-        self.lambda_cycle_l1 = opt.lambda_cycle_l1
-        self.lambda_kl = opt.lambda_kl
-        self.lambda_mse = opt.lambda_mse
         self.input_size = opt.fine_size ** 2
         self.upscaler = Upscale(size=opt.fine_size, scale_factor=8, device=device)
         self.use_orog = not opt.no_orog
@@ -100,7 +96,6 @@ class Decoder(nn.Module):
     def __init__(self, opt):
         super(Decoder, self).__init__()
         self.nz = opt.nz
-        self.no = opt.no
         nf_decoder = opt.nf_decoder
         self.scale_factor = opt.scale_factor
         self.use_orog = not opt.no_orog
@@ -115,7 +110,7 @@ class Decoder(nn.Module):
                                     nn.BatchNorm2d(nf_decoder),
                                     nn.ReLU())
         # todo put 3 (uas+vas+coarse_pr) to some variable
-        self.layer2 = nn.Sequential(nn.ConvTranspose2d(in_channels=nf_decoder + self.no + 3,
+        self.layer2 = nn.Sequential(nn.ConvTranspose2d(in_channels=nf_decoder + 3,
                                                        out_channels=nf_decoder * 2, kernel_size=3,
                                                        stride=3, padding=1),
                                     nn.BatchNorm2d(nf_decoder * 2),
@@ -151,7 +146,6 @@ class Decoder(nn.Module):
         hidden_state2 = self.layer2(torch.cat((hidden_state, coarse_pr, coarse_uas, coarse_vas), 1))
 
         hidden_state3 = self.layer3(hidden_state2)
-
 
         if self.use_orog:
             hidden_state4 = self.layer4(torch.cat((hidden_state3, orog), 1)) #todo try without
