@@ -8,7 +8,7 @@ from netCDF4 import Dataset as Nc4Dataset
 
 
 class ClimateDataset(Dataset):
-    def __init__(self, opt):
+    def __init__(self, opt, phase):
         self.root = opt.dataroot
         self.scale_factor = opt.scale_factor
         self.fine_size = opt.fine_size
@@ -25,12 +25,9 @@ class ClimateDataset(Dataset):
             self.length = self.rows*(cols-self.n_test-self.n_val)*times
         self.upscaler = Upscale(size=self.fine_size+2*self.scale_factor, scale_factor=self.scale_factor)
 
-        self.lat_lon_train = [[i for i in range(cols)] for _ in range(self.rows)]
-
         # remove 4 40 boxes to create a training set for each block of 40 rows
-        self.test_val_indices = create_test_and_val_indices(self.rows, cols, self.n_test, self.n_val, seed=opt.seed)
-        self.lat_lon_train = [[self.lat_lon_train[i][j] for j in range(cols) if j not in self.test_val_indices[i]]
-                              for i in range(self.rows)]
+        self.lat_lon_list = create_lat_lon_indices(self.rows, cols, self.n_test, self.n_val,
+                                                   seed=opt.seed, phase=phase)
 
     def __len__(self):
         return self.length
@@ -39,8 +36,8 @@ class ClimateDataset(Dataset):
         start_time = time.time()
 
         # ++ calculate lat lon and time from index ++ #
-        s_lat = len(self.lat_lon_train)
-        s_lon = len(self.lat_lon_train[0])
+        s_lat = len(self.lat_lon_list)
+        s_lon = len(self.lat_lon_list[0])
 
         t = index // (s_lat * s_lon)
         lat = index % (s_lat * s_lon) // s_lon
@@ -54,7 +51,7 @@ class ClimateDataset(Dataset):
         # add scale factor because first 8 pixels are only for boundary conditions
         # --> for lat=0 the index in the netcdf file is 8.
         anchor_lat = lat * self.cell_size + w_offset + self.scale_factor
-        anchor_lon = self.lat_lon_train[lat][lon] * self.cell_size + h_offset
+        anchor_lon = self.lat_lon_list[lat][lon] * self.cell_size + h_offset
 
         # select indices for a 48 x 48 box around the 32 x 32 box to be downscaled (with boundary values)
         boundary_lats = [i for i in range(anchor_lat-self.scale_factor, anchor_lat+self.fine_size+self.scale_factor)]
@@ -99,8 +96,21 @@ def check_dimensions(file, cell_size, scale_factor):
                          "for the boundary conditions")
 
 
-def create_test_and_val_indices(rows, cols, n_test, n_val, seed):
+def create_lat_lon_indices(rows, cols, n_test, n_val, seed, phase):
     rand = random.Random()
     rand.seed(seed)
-    test_val_indices = [rand.sample([i for i in range(cols)], n_val+n_test) for _ in range(rows)]
-    return test_val_indices
+    train_indices = [[i for i in range(cols)] for _ in range(rows)]
+    val_indices = [rand.sample(train_indices[j], n_val) for j in range(rows)]
+    # remove val_indices from train_indices
+    train_indices = [[i for i in train_indices[j] if not i in val_indices[j]] for j in range(rows)]
+    test_indices = [rand.sample(train_indices[j], n_test) for j in range(rows)]
+    # remove test_indices from train_indices
+    train_indices = [[i for i in train_indices[j] if not i in test_indices[j]] for j in range(rows)]
+    if phase == 'train':
+        return train_indices
+    elif phase == 'test':
+        return test_indices
+    elif phase == 'val':
+        return val_indices
+    else:
+        raise ValueError("{} is not a valid argument for phase".format(phase))

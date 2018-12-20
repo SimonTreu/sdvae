@@ -29,7 +29,7 @@ def main():
         os.makedirs(save_root)
 
     # get the data
-    climate_data = ClimateDataset(opt=opt)
+    climate_data = ClimateDataset(opt=opt, phase='train')
     climate_data_loader = DataLoader(climate_data,
                                      batch_size=opt.batch_size,
                                      shuffle=True,
@@ -138,8 +138,9 @@ def main():
                 # todo add performance evaluation on valitation set periodically
 
                 #if batch_idx % opt.eval_val_loss == 0:
-                #    model.eval() # todo set model.train() above
-                #    val_climate_dataset.init_epoch() # todo implement val_climate_dataset
+                #    model.eval()
+                #    val_climate_dataset.init_epoch() # todo implement val_climate_datasettrain
+                #    model.train()
                     #todo set all losses zero
 
 

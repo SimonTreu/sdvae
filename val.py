@@ -23,7 +23,7 @@ def main():
     outdir = os.path.join(opt.results_dir, opt.name, '%s_%s' % (opt.phase, load_epoch))
     if not os.path.exists(outdir):
         os.makedirs(outdir)
-    climate_data = ClimateDataset(opt=opt)
+    climate_data = ClimateDataset(opt=opt, phase=opt.phase)
 
     # large_cell = 48x48, cell = 40x40, small_cell = 32x32
     large_cell = opt.fine_size + 2*opt.scale_factor
@@ -41,12 +41,11 @@ def main():
         raise ValueError("model {} is not implemented".format(opt.model))
 
     # Iterate val cells and compute #n_samples reconstructions.
-    # todo seperate val and test
     index = 0
     # read input file
     input_dataset = Dataset(os.path.join(opt.dataroot, 'dataset.nc4'), "r", format="NETCDF4")
     for idx_lat in range(climate_data.rows):
-        for idx_lon in climate_data.test_val_indices[idx_lat][-climate_data.n_val:]:
+        for idx_lon in climate_data.lat_lon_list[idx_lat]:
             # calculate upper left index for cell with boundary values to downscale #todo better formulation
             anchor_lat = idx_lat * climate_data.cell_size  + climate_data.scale_factor
             anchor_lon = idx_lon * climate_data.cell_size
