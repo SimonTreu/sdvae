@@ -69,20 +69,20 @@ class GammaVae(nn.Module):
         else:
             return mu
 
-    def loss_function(self, p, alpha, beta, x, mu, log_var, coarse_pr, lambda_kl):
-        # implement negative log predictive density
+    def loss_function(self, p, alpha, beta, x, mu, log_var, coarse_pr,):
+        # negative log predictive density
         nlpd = self._neg_log_gamma_likelihood(x, alpha, beta, p)
+        # Kullback-Leibler Divergence
         kld = torch.mean(-0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp(),1))
-        cycle_loss = torch.zeros_like(kld)
-        loss = torch.zeros_like(kld)
-        if self.lambda_mse != 0:
-            nlpd *= self.lambda_mse
-            loss += nlpd
-        loss += kld*lambda_kl
+        loss = kld + nlpd
+
+        # not added to the total loss
+        coarse_recon = self.upscaler.upscale(p * alpha * beta)
+        cycle_loss = nn.functional.mse_loss(coarse_pr[:,:,1:-1,1:-1], coarse_recon, size_average=True)
+
         return nlpd, kld, cycle_loss, loss
 
     def _neg_log_gamma_likelihood(self, x, alpha, beta, p):
-        # if y > 0:
         result = torch.zeros(1)
         if (x > 0).any():
             result = - torch.sum(torch.log(p[x > 0])
@@ -91,7 +91,6 @@ class GammaVae(nn.Module):
                         - x[x > 0] / beta[x > 0]
                         - torch.lgamma(alpha[x > 0])
                         )
-        # if y = 0
         if (x == 0).any():
             result -= torch.sum(torch.log(1 - p[x == 0]) + 0 * alpha[x == 0] + 0 * beta[x == 0])
         return result/x.shape[0] # mean over batch size

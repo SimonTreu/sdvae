@@ -97,7 +97,7 @@ def main():
                     p, alpha, beta, mu, log_var = model(fine_pr=fine_pr, coarse_pr=coarse_pr,
                                                   orog=orog, coarse_uas=coarse_uas, coarse_vas=coarse_vas)
                     mse, kld, cycle_loss, loss = model.loss_function(p, alpha, beta, fine_pr, mu, log_var,
-                                                                     coarse_pr, lambda_kl)
+                                                                     coarse_pr)
                 else:
                     raise ValueError("model {} is not implemented".format(opt.model))
 
