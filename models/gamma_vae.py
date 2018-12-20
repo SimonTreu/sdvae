@@ -16,57 +16,34 @@ class GammaVae(nn.Module):
         self.upscaler = Upscale(size=opt.fine_size, scale_factor=8, device=device)
         self.use_orog = not opt.no_orog
 
-        nf_encoder = opt.nf_encoder
+        self.nf_encoder = opt.nf_encoder
 
         # todo also enable removing orog
-        self.h_layer1 = nn.Sequential(nn.Conv2d(in_channels=1 + self.use_orog, out_channels=nf_encoder,
+        self.h_layer1 = nn.Sequential(nn.Conv2d(in_channels=1 + self.use_orog, out_channels=self.nf_encoder,
                                                 kernel_size=3, padding=1, stride=1),
-                                      nn.BatchNorm2d(nf_encoder),
+                                      nn.BatchNorm2d(self.nf_encoder),
                                       nn.ReLU(),
-                                      nn.MaxPool2d(kernel_size=2),
-                                      nn.Dropout(0.5))
+                                      nn.MaxPool2d(kernel_size=2))
 
-        self.h_layer2 = nn.Sequential(nn.Conv2d(in_channels=nf_encoder, out_channels=nf_encoder * 2,
+        self.h_layer2 = nn.Sequential(nn.Conv2d(in_channels=self.nf_encoder, out_channels=self.nf_encoder * 2,
                                                 kernel_size=4, padding=0, stride=1),
-                                      nn.BatchNorm2d(nf_encoder * 2),
+                                      nn.BatchNorm2d(self.nf_encoder * 2),
                                       nn.ReLU(),
-                                      nn.MaxPool2d(kernel_size=2),
-                                      nn.Dropout(0.5))
+                                      nn.MaxPool2d(kernel_size=2))
         # todo 3 is uas, vas + coarse_pr and should be a variable
-        self.h_layer3 = nn.Sequential(nn.Conv2d(in_channels=2 * nf_encoder + 3, out_channels=nf_encoder * 3,
+        self.h_layer3 = nn.Sequential(nn.Conv2d(in_channels=2 * self.nf_encoder + 3, out_channels=self.nf_encoder * 3,
                                                 kernel_size=3, padding=1, stride=1),
-                                      nn.BatchNorm2d(nf_encoder * 3),
+                                      nn.BatchNorm2d(self.nf_encoder * 3),
                                       nn.ReLU(),
-                                      nn.MaxPool2d(kernel_size=2),
-                                      nn.Dropout(0.5))
+                                      nn.MaxPool2d(kernel_size=2))
 
         # mu
-        self.mu = nn.Sequential(nn.Conv2d(in_channels=3 * nf_encoder, out_channels=self.nz,
-                                          kernel_size=3, padding=0, stride=1))
+        self.mu = nn.Sequential(nn.Linear(in_features=self.nf_encoder * 3 * 9, out_features=self.nz))
 
         # log_var
-        self.log_var = nn.Sequential(nn.Conv2d(in_channels=3 * nf_encoder, out_channels=self.nz,
-                                               kernel_size=3, padding=0, stride=1))
+        self.log_var = nn.Sequential(nn.Linear(in_features=self.nf_encoder * 3 * 9, out_features=self.nz))
 
         self.decode = Decoder(opt)
-
-        if self.no > 0:
-            # todo fix this part
-            self.encode_orog = nn.Sequential(nn.Conv2d(in_channels=1, out_channels=self.no * 2,
-                                                       kernel_size=3, padding=1, stride=1),
-                                             nn.BatchNorm2d(self.no * 2),
-                                             nn.ReLU(),
-                                             nn.MaxPool2d(kernel_size=2),
-                                             nn.Conv2d(in_channels=self.no * 2, out_channels=self.no,
-                                                       kernel_size=4, padding=0, stride=1)
-                                             )
-            self.encode_orog_2 = nn.Sequential(nn.Conv2d(in_channels=1, out_channels=self.no * 2,
-                                                         kernel_size=3, padding=1, stride=1),
-                                               nn.BatchNorm2d(self.no * 2),
-                                               nn.ReLU(),
-                                               nn.Conv2d(in_channels=self.no * 2, out_channels=self.no,
-                                                         kernel_size=3, padding=1, stride=2)
-                                               )
 
     def forward(self, fine_pr, coarse_pr, orog, coarse_uas, coarse_vas):
         if self.use_orog:
@@ -76,51 +53,13 @@ class GammaVae(nn.Module):
         h_layer2 = self.h_layer2(h_layer1)
         h_layer3 = self.h_layer3(torch.cat((h_layer2, coarse_pr, coarse_uas, coarse_vas), 1))
 
-        mu = self.mu(h_layer3)
-        log_var = self.log_var(h_layer3)
+        mu = self.mu(h_layer3.view(h_layer3.shape[0], -1)).unsqueeze(-1).unsqueeze(-1)
+        log_var = self.log_var(h_layer3.view(h_layer3.shape[0], -1)).unsqueeze(-1).unsqueeze(-1)
         z = self.reparameterize(mu, log_var)
 
-        # todo remove this if and else here
-        if self.no > 0:
-            o = self.encode_orog(orog)
-            o2 = self.encode_orog_2(orog)
-            return self.decode(z=z, coarse_pr=coarse_pr,
-                               orog=orog, coarse_uas=coarse_uas, coarse_vas=coarse_vas,
-                               o=o, o2=o2), mu.view(-1, self.nz), log_var.view(-1, self.nz)
-        else:
-            return (*self.decode(z=z, coarse_pr=coarse_pr,
+        return (*self.decode(z=z, coarse_pr=coarse_pr,
                                orog=orog, coarse_uas=coarse_uas, coarse_vas=coarse_vas
                                )), mu.view(-1, self.nz), log_var.view(-1, self.nz)
-        '''
-        self.decode(z=self.reparameterize(torch.zeros_like(mu), torch.zeros_like(mu)), coarse_pr=coarse_pr,
-                               orog=orog, coarse_uas=coarse_uas, coarse_vas=coarse_vas
-                               ).detach().numpy()[0,0,:,:]
-
-        fine_pr.numpy()[0,0,:,:]
-
-        mu.detach().numpy()[0,:,0,0]
-
-import matplotlib.pyplot as plt
-import numpy as np
-
-vmin = -1.08
-vmax = 20
-fig, axes = plt.subplots(3, 5, sharex='col', sharey='row')
-for i in range(5):
-    axes[0, i].imshow(fine_pr.numpy()[0,0,:,:], vmin=vmin, vmax=vmax, cmap=plt.get_cmap('jet'))
-    axes[1, i].imshow(self.decode(z=self.reparameterize(
-        mu, log_var), coarse_pr=coarse_pr,orog=orog,
-        coarse_uas=coarse_uas, coarse_vas=coarse_vas).detach().numpy()[0,0,:,:],
-                      vmin=vmin, vmax=vmax, cmap=plt.get_cmap('jet'))
-    axes[2, i].imshow(self.decode(z=self.reparameterize(
-        torch.zeros_like(mu), torch.zeros_like(mu)), coarse_pr=coarse_pr,orog=orog,
-        coarse_uas=coarse_uas, coarse_vas=coarse_vas).detach().numpy()[0,0,:,:],
-                      vmin=vmin, vmax=vmax, cmap=plt.get_cmap('jet'))
-axes[0, 0].set_title('Original Precipitation')
-axes[1, 0].set_title('Reconstructed with encoded latent vector Precipitation')
-axes[2, 0].set_title('Reconstructed Precipitation')
-plt.show()
-        '''
 
     def reparameterize(self, mu, log_var):
         if self.training:
@@ -166,6 +105,8 @@ class Decoder(nn.Module):
         nf_decoder = opt.nf_decoder
         self.scale_factor = opt.scale_factor
         self.use_orog = not opt.no_orog
+        self.input_size = opt.fine_size ** 2
+        self.fine_size = opt.fine_size
 
         # todo dropout
 
@@ -188,34 +129,30 @@ class Decoder(nn.Module):
 
         self.layer4 = nn.Sequential(
             nn.Conv2d(in_channels=nf_decoder * 2 + 1 + self.use_orog, out_channels=nf_decoder * 2,
-                      kernel_size=3, stride=1, padding=1),
+                      kernel_size=3, stride=1, padding=2),
             nn.BatchNorm2d(nf_decoder * 2),
             nn.ReLU())
+        # all padding
 
         # layer 4 cannot be the output layer to enable a nonlinear relationship with topography
 
         self.p_layer = nn.Sequential(nn.Conv2d(in_channels=nf_decoder * 2, out_channels=1,
-                                                    kernel_size=3, stride=1, padding=1),
+                                                    kernel_size=3, stride=1, padding=0),
                                      nn.Sigmoid())
         self.alpha_layer = nn.Sequential(nn.Conv2d(in_channels=nf_decoder * 2, out_channels=1,
-                                                    kernel_size=3, stride=1, padding=1),
+                                                    kernel_size=3, stride=1, padding=0),
                                          Exp_Module())
         self.beta_layer = nn.Sequential(nn.Conv2d(in_channels=nf_decoder * 2, out_channels=1,
-                                                    kernel_size=3, stride=1, padding=1),
+                                                    kernel_size=3, stride=1, padding=0),
                                         Exp_Module())
 
     def forward(self, z, coarse_pr,
-                coarse_uas, coarse_vas, orog,
-                o=None):
-        if o is None:
-            hidden_state = self.layer1(z)
-            hidden_state2 = self.layer2(torch.cat((hidden_state, coarse_pr, coarse_uas, coarse_vas), 1))
-        else:
-            hidden_state = self.layer1(z)
-            hidden_state2 = self.layer2(torch.cat((hidden_state, o, coarse_pr, coarse_uas, coarse_vas), 1))
+                coarse_uas, coarse_vas, orog):
+        hidden_state = self.layer1(z)
+        hidden_state2 = self.layer2(torch.cat((hidden_state, coarse_pr, coarse_uas, coarse_vas), 1))
 
         upsample1 = torch.nn.Upsample(scale_factor=self.scale_factor // 2, mode='nearest')
-        coarse_pr_1 = upsample1(coarse_pr[:, :, 1:-1, 1:-1])
+        coarse_pr_1 = upsample1(coarse_pr[:, :, 1:-1, 1:-1]) # todo try if that is necessary
 
         hidden_state3 = self.layer3(torch.cat((hidden_state2, coarse_pr_1), 1))
 
