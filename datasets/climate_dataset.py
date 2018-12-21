@@ -22,7 +22,12 @@ class ClimateDataset(Dataset):
             times = file['time'].size
             cols = file['lon'].size//self.cell_size
             self.rows = file['lat'].size//self.cell_size
-            self.length = self.rows*(cols-self.n_test-self.n_val)*times
+            if phase == 'train':
+                self.length = self.rows*(cols-self.n_test-self.n_val)*times
+            elif phase == 'val':
+                self.length = self.rows*self.n_val*times
+            elif phase == 'test':
+                self.length = self.rows * self.n_test * times
         self.upscaler = Upscale(size=self.fine_size+2*self.scale_factor, scale_factor=self.scale_factor)
 
         # remove 4 40 boxes to create a training set for each block of 40 rows

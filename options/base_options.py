@@ -25,6 +25,8 @@ class BaseOptions:
                                  help='number of iterations until the next logging of cost values')
         self.parser.add_argument('--plot_interval', type=int, default=1000000,
                                  help='number of iterations until the next plotting of training results')
+        self.parser.add_argument('--eval_val_loss', type=int, default=100,
+                                 help='number of iterations until validation loss is calculated')
         self.parser.add_argument('--lr', type=float, default=1e-3, help='learning rate for optimizer')
         self.parser.add_argument('--save_interval', type=int, default=1, help='every _ epoch the model is saved')
         self.parser.add_argument('--save_latest_interval', type=int, default=100, help='every _ iteration the model is saved')

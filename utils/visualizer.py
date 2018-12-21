@@ -17,6 +17,7 @@ class Visualizer:
         self.n_batches = n_batches
         self.csv_name = os.path.join('checkpoints', opt.name, 'loss.csv')
         self.csv_epoch_name = os.path.join('checkpoints', opt.name, 'loss_epoch.csv')
+        self.eval_csv = os.path.join('checkpoints', opt.name, 'eval.csv')
         self.fine_size = opt.fine_size
         util.mkdir(self.image_path)
         if opt.load_epoch < 0:
@@ -24,9 +25,14 @@ class Visualizer:
                 csv_writer = csv.writer(log_csv, delimiter= ',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                 title =['epoch', 'iters', 'mse', 'kl', 'cycle', 'total', 'iter_time', 'iter_data_time']
                 csv_writer.writerow(title)
-            with open(self.csv_epoch_name, "w") as log_csv:
-                csv_writer = csv.writer(log_csv, delimiter= ',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            with open(self.csv_epoch_name, "w") as csv_epoch_name:
+                csv_writer = csv.writer(csv_epoch_name, delimiter= ',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                 title =['epoch', 'mse', 'kl', 'cycle', 'total', 'epoch_time']
+                csv_writer.writerow(title)
+            with open(self.eval_csv, "w") as eval_csv:
+                csv_writer = csv.writer(eval_csv, delimiter= ',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                title =['epoch', 'val_mse', 'train_mse', 'val_kld', 'train_kld', 'val_cycle_loss', 'train_cycle_loss',
+                        'val_loss', 'train_loss', 'inf_losses']
                 csv_writer.writerow(title)
 
     def plot(self, fine_pr, recon_pr, image_name):
@@ -89,6 +95,29 @@ class Visualizer:
                    epoch_cycle_loss / self.training_size,
                    epoch_loss / self.training_size,
                    epoch_time]
+            csv_writer.writerow(row)
+
+    def print_eval(self, epoch, val_mse, val_kld, val_cycle_loss, val_loss, inf_losses,
+                   train_mse, train_kld, train_cycle_loss, train_loss):
+        print('++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++')
+        print('Train Epoch: {:<3}'
+              'Val MSE: {:.1f} | Train MSE:  {:<10.1f}'
+              'Val KL: {:.1f} | Train KL: {:<10.1f}'
+              'Val cycle {:.3f} | Train cycle: {:<10.3f}'
+              'Val Loss: {:.1f} | Train Loss: {:<10.1f} '
+              ' Inf Losses: {}'.format(
+               epoch,
+               val_mse, train_mse,
+               val_kld, train_kld,
+               val_cycle_loss, train_cycle_loss,
+               val_loss, train_loss,
+               inf_losses))
+        print('++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++')
+
+        with open(self.eval_csv, "a") as eval_csv:
+            csv_writer = csv.writer(eval_csv, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            row = [epoch, val_mse, train_mse, val_kld, train_kld, val_cycle_loss, train_cycle_loss,
+                   val_loss, train_loss, inf_losses]
             csv_writer.writerow(row)
 
 

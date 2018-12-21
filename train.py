@@ -147,32 +147,42 @@ def main():
 
                 # todo add performance evaluation on valitation set periodically
 
-                '''if batch_idx % opt.eval_val_loss == 0 and batch_idx > 0:
+                if batch_idx % opt.eval_val_loss == 0 and batch_idx > 0:
                     # switch model to evaluation mode
                     model.eval()
-                    val_data_loader.init_epoch()
-                    val_mse_list = []; val_kld_list = []; val_cycle_loss_list = []; val_loss_list = []
-                    for batch_idx, data in enumerate(climate_data_loader, 0):
+                    # calculate val loss
+                    val_loss_sum = np.zeros(4)  # val_mse, val_kld, val_cycle_loss, val_loss
+                    inf_losses = 0  # nr of sets where loss was inf
+                    for batch_idx, data in enumerate(val_data_loader, 0):
                         p, alpha, beta, mu, log_var = model(fine_pr=data['fine_pr'].to(device),
                                                             coarse_pr=data['coarse_pr'].to(device),
                                                             orog=data['orog'].to(device), 
                                                             coarse_uas=data['coarse_uas'].to(device), 
                                                             coarse_vas=data['coarse_vas'].to(device))
-                        val_mse, val_kld, val_cycle_loss, val_loss = model.loss_function(p, alpha, beta,
-                                                                                         data['fine_pr'].to(device),
-                                                                                         mu, log_var,
-                                                                                         data['coarse_pr'].to(device))
-                        if val_loss < float('inf'):
-                            val_mse_list.append(val_mse.item()); val_kld_list.append(val_kld.item())
-                            val_cycle_loss_list.append(cycle_loss.item()); val_loss_list.append(val_loss.item())
-                    viz.eval_val(val_mse=sum(val_mse_list)/len(val_mse_list),
-                                 val_kld=sum(val_kld_list)/len(val_kld_list),
-                                 val_cycle_loss=sum(val_cycle_loss_list) / len(val_cycle_loss_list),
-                                 val_loss=sum(val_loss_list) / len(val_loss_list),)
+                        val_loss = model.loss_function(p, alpha, beta,data['fine_pr'].to(device),
+                                                       mu, log_var,
+                                                       data['coarse_pr'].to(device))
+                        val_loss = [l.item() for l in val_loss]
+                        if val_loss[-1] < float('inf'):
+                            val_loss_sum += val_loss
+                        else:
+                            inf_losses += 1
+                        if batch_idx >= 200:  # todo find a good break value, make shure that it is differen
+                            break
+
+                    n_val = 200 - inf_losses
+                    viz.print_eval(epoch=epoch,
+                                   val_mse=val_loss_sum[0]/n_val,
+                                   val_kld=val_loss_sum[1]/n_val,
+                                   val_cycle_loss=val_loss_sum[2]/n_val,
+                                   val_loss=val_loss_sum[3]/n_val,
+                                   inf_losses=inf_losses,
+                                   train_mse=np.mean(mse_list[-opt.eval_val_loss:]),
+                                   train_kld=np.mean(kld_list[-opt.eval_val_loss:]),
+                                   train_cycle_loss=np.mean(cycle_loss_list[-opt.eval_val_loss:]),
+                                   train_loss=np.mean(loss_list[-opt.eval_val_loss:]))
 
                     model.train()
-                    #todo set all losses zero'''
-
 
 
 
