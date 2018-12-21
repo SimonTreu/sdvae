@@ -8,6 +8,7 @@ import torch
 import os
 from options.base_options import BaseOptions
 import time
+import numpy as np
 
 
 def save(epoch, save_root, gpu_ids, edgan_model):
@@ -34,6 +35,8 @@ def main():
                                      batch_size=opt.batch_size,
                                      shuffle=True,
                                      num_workers=int(opt.n_threads))
+    val_data = ClimateDataset(opt=opt, phase='val')
+    val_data_loader = DataLoader(val_data, batch_size=opt.batch_size,shuffle=True,num_workers=int(opt.n_threads))
 
     # load the model
     if opt.model == "mse_vae":
@@ -54,94 +57,121 @@ def main():
         # get optimizer
         model.train()
         optimizer = torch.optim.Adam(model.parameters(), lr=opt.lr)
-        viz = Visualizer(opt, n_images=5, training_size=len(climate_data_loader.dataset), n_batches=len(climate_data_loader))
+        viz = Visualizer(opt, n_images=5,
+                         training_size=len(climate_data_loader.dataset), n_batches=len(climate_data_loader))
 
         for epoch_idx in range(opt.n_epochs):
-            epoch_start_time = time.time()
+            mse_list = []
+            kld_list = []
+            cycle_loss_list = []
+            loss_list = []
+
             epoch = initial_epoch + epoch_idx
             img_id = 0
-            epoch_mse = 0
-            epoch_kld = 0
-            epoch_cycle_loss = 0
-            epoch_loss = 0
+
+            # timing
+            epoch_start_time = time.time()
             iter_data_start_time = time.time()
             iter_data_time = 0
             iter_time = 0
-            interval_mse = []
-            interval_kld = []
-            interval_cycle_loss = []
-            interval_loss = []
+
             for batch_idx, data in enumerate(climate_data_loader, 0):
                 iter_start_time = time.time()
-                fine_pr = data['fine_pr'].to(device)
-                coarse_pr = data['coarse_pr'].to(device)
-                coarse_uas = data['coarse_uas'].to(device)
-                coarse_vas = data['coarse_vas'].to(device)
-                orog = data['orog'].to(device)
 
                 optimizer.zero_grad()
 
-                if opt.model == "mse_vae":
-                    recon_pr, mu, log_var = model(fine_pr=fine_pr, coarse_pr=coarse_pr,
-                                                  orog=orog, coarse_uas=coarse_uas, coarse_vas=coarse_vas)
-                    mse, kld, cycle_loss, loss = model.loss_function(recon_pr, fine_pr, mu, log_var,
-                                                                     coarse_pr, lambda_kl)
+                if opt.model == "mse_vae": # todo use the same model
+                    recon_pr, mu, log_var = model(fine_pr=data['fine_pr'].to(device),
+                                                  coarse_pr=data['coarse_pr'].to(device),
+                                                  orog=data['orog'].to(device),
+                                                  coarse_uas=data['coarse_uas'].to(device),
+                                                  coarse_vas=data['coarse_vas'].to(device))
+
+                    mse, kld, cycle_loss, loss = model.loss_function(recon_pr, data['fine_pr'].to(device),
+                                                                     mu, log_var,
+                                                                     data['coarse_pr'].to(device))
                 elif opt.model == "gamma_vae":
-                    p, alpha, beta, mu, log_var = model(fine_pr=fine_pr, coarse_pr=coarse_pr,
-                                                  orog=orog, coarse_uas=coarse_uas, coarse_vas=coarse_vas)
-                    mse, kld, cycle_loss, loss = model.loss_function(p, alpha, beta, fine_pr, mu, log_var,
-                                                                     coarse_pr)
+                    p, alpha, beta, mu, log_var = model(fine_pr=data['fine_pr'].to(device),
+                                                        coarse_pr=data['coarse_pr'].to(device),
+                                                        orog=data['orog'].to(device),
+                                                        coarse_uas=data['coarse_uas'].to(device),
+                                                        coarse_vas=data['coarse_vas'].to(device))
+
+                    mse, kld, cycle_loss, loss = model.loss_function(p, alpha, beta, data['fine_pr'].to(device),
+                                                                     mu, log_var,
+                                                                     data['coarse_pr'].to(device))
                 else:
                     raise ValueError("model {} is not implemented".format(opt.model))
 
                 if loss.item() < float('inf'):
                     loss.backward()
-                    # todo refactor this part
-                    interval_mse += [mse.item()]
-                    interval_kld += [kld.item()]
-                    interval_cycle_loss += [cycle_loss.item()]
-                    interval_loss += [loss.item()]
-                    epoch_mse += mse.item()
-                    epoch_kld += kld.item()
-                    epoch_cycle_loss += cycle_loss.item()
-                    epoch_loss += loss.item()
+
+                    mse_list += [mse.item()]
+                    kld_list += [kld.item()]
+                    cycle_loss_list += [cycle_loss.item()]
+                    loss_list += [loss.item()]
+
                     optimizer.step()
                 else:
                     print("inf loss")
+
+                # timing
                 iter_time += time.time()-iter_start_time
                 iter_data_time += iter_start_time-iter_data_start_time
 
-                if batch_idx % opt.log_interval == 0:
-                    viz.print(epoch, batch_idx, sum(interval_mse)/len(interval_mse), sum(interval_kld)/len(interval_kld),
-                              sum(interval_cycle_loss)/len(interval_cycle_loss), sum(interval_loss)/len(interval_loss), iter_time,
+                if batch_idx % opt.log_interval == 0 and batch_idx > 0:
+                    viz.print(epoch, batch_idx,
+                              np.mean(mse_list[-opt.log_interval:]),
+                              np.mean(kld_list[-opt.log_interval:]),
+                              np.mean(cycle_loss_list[-opt.log_interval:]),
+                              np.mean(loss_list[-opt.log_interval:]),
+                              iter_time,
                               iter_data_time, sum(data['time']).item())
+
                     iter_data_time = 0
                     iter_time = 0
-                    interval_mse = []
-                    interval_kld = []
-                    interval_cycle_loss = []
-                    interval_loss = []
-                if batch_idx % opt.plot_interval == 0:
+
+                if batch_idx % opt.plot_interval == 0 and batch_idx > 0:
                     img_id += 1
                     image_name = "Epoch{}_Image{}.jpg".format(epoch, img_id)
                     if opt.model == "mse_vae":
-                        viz.plot(fine_pr=fine_pr, recon_pr=recon_pr, image_name=image_name)
+                        viz.plot(fine_pr=data['fine_pr'].to(device), recon_pr=recon_pr, image_name=image_name)
                     elif opt.model == "gamma_vae":
-                        viz.plot(fine_pr=fine_pr, recon_pr=p*alpha*beta, image_name=image_name)
+                        viz.plot(fine_pr=data['fine_pr'].to(device), recon_pr=p*alpha*beta, image_name=image_name)
                     else:
                         raise ValueError("model {} is not implemented".format(opt.model))
 
-                if batch_idx % opt.save_latest_interval == 0:
+                if batch_idx % opt.save_latest_interval == 0 and batch_idx > 0:
                     save('latest', save_root, opt.gpu_ids, model)
                     print('saved latest epoch after {} iterations'.format(batch_idx))
 
                 # todo add performance evaluation on valitation set periodically
 
-                #if batch_idx % opt.eval_val_loss == 0:
-                #    model.eval()
-                #    val_climate_dataset.init_epoch() # todo implement val_climate_datasettrain
-                #    model.train()
-                    #todo set all losses zero
+                '''if batch_idx % opt.eval_val_loss == 0 and batch_idx > 0:
+                    # switch model to evaluation mode
+                    model.eval()
+                    val_data_loader.init_epoch()
+                    val_mse_list = []; val_kld_list = []; val_cycle_loss_list = []; val_loss_list = []
+                    for batch_idx, data in enumerate(climate_data_loader, 0):
+                        p, alpha, beta, mu, log_var = model(fine_pr=data['fine_pr'].to(device),
+                                                            coarse_pr=data['coarse_pr'].to(device),
+                                                            orog=data['orog'].to(device), 
+                                                            coarse_uas=data['coarse_uas'].to(device), 
+                                                            coarse_vas=data['coarse_vas'].to(device))
+                        val_mse, val_kld, val_cycle_loss, val_loss = model.loss_function(p, alpha, beta,
+                                                                                         data['fine_pr'].to(device),
+                                                                                         mu, log_var,
+                                                                                         data['coarse_pr'].to(device))
+                        if val_loss < float('inf'):
+                            val_mse_list.append(val_mse.item()); val_kld_list.append(val_kld.item())
+                            val_cycle_loss_list.append(cycle_loss.item()); val_loss_list.append(val_loss.item())
+                    viz.eval_val(val_mse=sum(val_mse_list)/len(val_mse_list),
+                                 val_kld=sum(val_kld_list)/len(val_kld_list),
+                                 val_cycle_loss=sum(val_cycle_loss_list) / len(val_cycle_loss_list),
+                                 val_loss=sum(val_loss_list) / len(val_loss_list),)
+
+                    model.train()
+                    #todo set all losses zero'''
 
 
 
@@ -150,10 +180,15 @@ def main():
 
             if epoch % opt.save_interval == 0:
                 save(epoch, save_root, opt.gpu_ids, model)
-        epoch_time = time.time() - epoch_start_time
-        viz.print_epoch(epoch=epoch, epoch_mse=epoch_mse,
-                        epoch_kld=epoch_kld, epoch_cycle_loss=epoch_cycle_loss,
-                        epoch_loss=epoch_loss, epoch_time=epoch_time)
+            else:
+                print('val inf loss')
+            epoch_time = time.time() - epoch_start_time
+            viz.print_epoch(epoch=epoch,
+                            epoch_mse=np.mean(mse_list),
+                            epoch_kld=np.mean(kld_list),
+                            epoch_cycle_loss=np.mean(cycle_loss_list),
+                            epoch_loss=np.mean(loss_list),
+                            epoch_time=epoch_time)
 
 
 if __name__ == '__main__':
