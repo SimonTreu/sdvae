@@ -11,27 +11,18 @@ class GammaVae(nn.Module):
         self.input_size = opt.fine_size ** 2
         self.upscaler = Upscale(size=opt.fine_size, scale_factor=8, device=device)
         self.use_orog = not opt.no_orog
+        self.no_dropout = opt.no_dropout
 
         self.nf_encoder = opt.nf_encoder
 
-        # todo also enable removing orog
-        self.h_layer1 = nn.Sequential(nn.Conv2d(in_channels=1 + self.use_orog, out_channels=self.nf_encoder,
-                                                kernel_size=3, padding=1, stride=1),
-                                      nn.BatchNorm2d(self.nf_encoder),
-                                      nn.ReLU(),
-                                      nn.MaxPool2d(kernel_size=2))
+        self.h_layer1 = self.down_conv(in_channels=1 + self.use_orog, out_channels=self.nf_encoder,
+                                       kernel_size=3, padding=1, stride=1)
 
-        self.h_layer2 = nn.Sequential(nn.Conv2d(in_channels=self.nf_encoder, out_channels=self.nf_encoder * 2,
-                                                kernel_size=4, padding=0, stride=1),
-                                      nn.BatchNorm2d(self.nf_encoder * 2),
-                                      nn.ReLU(),
-                                      nn.MaxPool2d(kernel_size=2))
-        # todo 3 is uas, vas + coarse_pr and should be a variable
-        self.h_layer3 = nn.Sequential(nn.Conv2d(in_channels=2 * self.nf_encoder + 3, out_channels=self.nf_encoder * 3,
-                                                kernel_size=3, padding=1, stride=1),
-                                      nn.BatchNorm2d(self.nf_encoder * 3),
-                                      nn.ReLU(),
-                                      nn.MaxPool2d(kernel_size=2))
+        self.h_layer2 = self.down_conv(in_channels=self.nf_encoder, out_channels=self.nf_encoder * 2,
+                                       kernel_size=4, padding=0, stride=1)
+
+        self.h_layer3 = self.down_conv(in_channels=2 * self.nf_encoder + 3, out_channels=self.nf_encoder * 3,
+                                                kernel_size=3, padding=1, stride=1)
 
         # mu
         self.mu = nn.Sequential(nn.Linear(in_features=self.nf_encoder * 3 * 9, out_features=self.nz))
@@ -54,8 +45,8 @@ class GammaVae(nn.Module):
         z = self.reparameterize(mu, log_var)
 
         return (*self.decode(z=z, coarse_pr=coarse_pr,
-                               orog=orog, coarse_uas=coarse_uas, coarse_vas=coarse_vas
-                               )), mu.view(-1, self.nz), log_var.view(-1, self.nz)
+                             orog=orog, coarse_uas=coarse_uas, coarse_vas=coarse_vas
+                             )), mu.view(-1, self.nz), log_var.view(-1, self.nz)
 
     def reparameterize(self, mu, log_var):
         if self.training:
@@ -91,6 +82,21 @@ class GammaVae(nn.Module):
             result -= torch.sum(torch.log(1 - p[x == 0]) + 0 * alpha[x == 0] + 0 * beta[x == 0])
         return result/x.shape[0] # mean over batch size
 
+    def down_conv(self, in_channels, out_channels, kernel_size, padding, stride):
+        if self.no_dropout:
+            return nn.Sequential(nn.Conv2d(in_channels=in_channels, out_channels=out_channels,
+                                           kernel_size=kernel_size, padding=padding, stride=stride),
+                                 nn.BatchNorm2d(out_channels),
+                                 nn.ReLU(),
+                                 nn.MaxPool2d(kernel_size=2))
+        else:
+            return nn.Sequential(nn.Conv2d(in_channels=in_channels, out_channels=out_channels,
+                                           kernel_size=kernel_size, padding=padding, stride=stride),
+                                 nn.BatchNorm2d(out_channels),
+                                 nn.ReLU(),
+                                 nn.MaxPool2d(kernel_size=2),
+                                 nn.Dropout())
+
 
 class Decoder(nn.Module):
     def __init__(self, opt):
@@ -101,35 +107,19 @@ class Decoder(nn.Module):
         self.use_orog = not opt.no_orog
         self.input_size = opt.fine_size ** 2
         self.fine_size = opt.fine_size
+        self.no_dropout = opt.no_dropout
 
-        # todo dropout
-
-        self.layer1 = nn.Sequential(nn.ConvTranspose2d(in_channels=self.nz,
-                                                       out_channels=nf_decoder,
-                                                       kernel_size=6, stride=1, padding=0),
-                                    nn.BatchNorm2d(nf_decoder),
-                                    nn.ReLU())
-        # todo put 3 (uas+vas+coarse_pr) to some variable
-        self.layer2 = nn.Sequential(nn.ConvTranspose2d(in_channels=nf_decoder + 3,
-                                                       out_channels=nf_decoder * 2, kernel_size=3,
-                                                       stride=3, padding=1),
-                                    nn.BatchNorm2d(nf_decoder * 2),
-                                    nn.ReLU())
-        self.layer3 = nn.Sequential(nn.ConvTranspose2d(in_channels=nf_decoder * 2,
-                                                       out_channels=nf_decoder * 2, kernel_size=4,
-                                                       stride=2, padding=1),
-                                    nn.BatchNorm2d(nf_decoder * 2),
-                                    nn.ReLU())
-
-        self.layer4 = nn.Sequential(
-            nn.Conv2d(in_channels=nf_decoder * 2 + self.use_orog, out_channels=nf_decoder * 2,
-                      kernel_size=3, stride=1, padding=2),
-            nn.BatchNorm2d(nf_decoder * 2),
-            nn.ReLU())
+        self.layer1 = self.up_conv(in_channels=self.nz,out_channels=nf_decoder,kernel_size=6, stride=1, padding=0)
+        self.layer2 = self.up_conv(in_channels=nf_decoder + 3,out_channels=nf_decoder * 2,
+                                   kernel_size=3,stride=3, padding=1)
+        self.layer3 = self.up_conv(in_channels=nf_decoder * 2,
+                                   out_channels=nf_decoder * 2, kernel_size=4,
+                                   stride=2, padding=1)
         # all padding
+        self.layer4 = self.conv(in_channels=nf_decoder * 2 + self.use_orog, out_channels=nf_decoder * 2,
+                      kernel_size=3, stride=1, padding=2)
 
         # layer 4 cannot be the output layer to enable a nonlinear relationship with topography
-
         self.p_layer = nn.Sequential(nn.Conv2d(in_channels=nf_decoder * 2, out_channels=1,
                                                     kernel_size=3, stride=1, padding=0),
                                      nn.Sigmoid())
@@ -156,6 +146,38 @@ class Decoder(nn.Module):
         beta = self.beta_layer(hidden_state4)
 
         return p, alpha, beta
+
+    def up_conv(self, in_channels,out_channels, kernel_size, stride, padding):
+        if self.no_dropout:
+            return nn.Sequential(nn.ConvTranspose2d(in_channels=in_channels,
+                                                    out_channels=out_channels,
+                                                    kernel_size=kernel_size,
+                                                    stride=stride,
+                                                    padding=padding),
+                                 nn.BatchNorm2d(out_channels),
+                                 nn.ReLU())
+        else:
+            return nn.Sequential(nn.ConvTranspose2d(in_channels=in_channels,
+                                                    out_channels=out_channels,
+                                                    kernel_size=kernel_size,
+                                                    stride=stride,
+                                                    padding=padding),
+                                 nn.BatchNorm2d(out_channels),
+                                 nn.ReLU(),
+                                 nn.Dropout())
+
+    def conv(self, in_channels, out_channels, kernel_size, padding, stride):
+        if self.no_dropout:
+            return nn.Sequential(nn.Conv2d(in_channels=in_channels, out_channels=out_channels,
+                                           kernel_size=kernel_size, padding=padding, stride=stride),
+                                 nn.BatchNorm2d(out_channels),
+                                 nn.ReLU())
+        else:
+            return nn.Sequential(nn.Conv2d(in_channels=in_channels, out_channels=out_channels,
+                                           kernel_size=kernel_size, padding=padding, stride=stride),
+                                 nn.BatchNorm2d(out_channels),
+                                 nn.ReLU(),
+                                 nn.Dropout())
 
 
 class Exp_Module(nn.Module):
