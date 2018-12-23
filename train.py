@@ -165,10 +165,10 @@ def main():
                             val_loss_sum += val_loss
                         else:
                             inf_losses += 1
-                        if batch_idx >= 200:  # todo find a good break value, make shure that it is differen
+                        if batch_idx >= opt.eval_val_loss:  # todo find a good break value, make shure that it is differen
                             break
 
-                    n_val = 200 - inf_losses
+                    n_val = opt.eval_val_loss - inf_losses
                     viz.print_eval(epoch=epoch,
                                    val_mse=val_loss_sum[0]/n_val,
                                    val_kld=val_loss_sum[1]/n_val,
