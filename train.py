@@ -145,8 +145,6 @@ def main():
                     save('latest', save_root, opt.gpu_ids, model)
                     print('saved latest epoch after {} iterations'.format(batch_idx))
 
-                # todo add performance evaluation on valitation set periodically
-
                 if batch_idx % opt.eval_val_loss == 0 and batch_idx > 0:
                     # switch model to evaluation mode
                     model.eval()

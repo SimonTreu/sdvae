@@ -12,7 +12,6 @@ class GammaVae(nn.Module):
         self.upscaler = Upscale(size=opt.fine_size, scale_factor=8, device=device)
         self.use_orog = not opt.no_orog
         self.no_dropout = opt.no_dropout
-
         self.nf_encoder = opt.nf_encoder
 
         self.h_layer1 = self.down_conv(in_channels=1 + self.use_orog, out_channels=self.nf_encoder,
@@ -108,15 +107,17 @@ class Decoder(nn.Module):
         self.input_size = opt.fine_size ** 2
         self.fine_size = opt.fine_size
         self.no_dropout = opt.no_dropout
+        self.coarse_layer3 = not opt.no_coarse_layer3
+        self.coarse_layer4 = not opt.no_coarse_layer4
 
         self.layer1 = self.up_conv(in_channels=self.nz,out_channels=nf_decoder,kernel_size=6, stride=1, padding=0)
         self.layer2 = self.up_conv(in_channels=nf_decoder + 3,out_channels=nf_decoder * 2,
                                    kernel_size=3,stride=3, padding=1)
-        self.layer3 = self.up_conv(in_channels=nf_decoder * 2,
+        self.layer3 = self.up_conv(in_channels=nf_decoder * 2 + self.coarse_layer3,
                                    out_channels=nf_decoder * 2, kernel_size=4,
                                    stride=2, padding=1)
         # all padding
-        self.layer4 = self.conv(in_channels=nf_decoder * 2 + self.use_orog, out_channels=nf_decoder * 2,
+        self.layer4 = self.conv(in_channels=nf_decoder * 2 + self.use_orog + self.coarse_layer4, out_channels=nf_decoder * 2,
                       kernel_size=3, stride=1, padding=2)
 
         # layer 4 cannot be the output layer to enable a nonlinear relationship with topography
@@ -135,12 +136,23 @@ class Decoder(nn.Module):
         hidden_state = self.layer1(z)
         hidden_state2 = self.layer2(torch.cat((hidden_state, coarse_pr, coarse_uas, coarse_vas), 1))
 
-        hidden_state3 = self.layer3(hidden_state2)
+        upsample1 = torch.nn.Upsample(scale_factor=self.scale_factor // 2, mode='nearest')
+        coarse_pr_1 = upsample1(coarse_pr[:, :, 1:-1, 1:-1])
 
-        if self.use_orog:
-            hidden_state4 = self.layer4(torch.cat((hidden_state3, orog), 1)) #todo try without
+        if self.coarse_layer3:
+            hidden_state3 = self.layer3(torch.cat((hidden_state2, coarse_pr_1), 1))
         else:
-            hidden_state4 = self.layer4(hidden_state3)
+            hidden_state3 = self.layer3(hidden_state2)
+
+        upsample2 = torch.nn.Upsample(scale_factor=self.scale_factor, mode='nearest')
+        coarse_pr_2 = upsample2(coarse_pr[:, :, 1:-1, 1:-1])
+
+        layer4_input = [hidden_state3]
+        if self.use_orog:
+            layer4_input.append(orog)
+        if self.coarse_layer4:
+            layer4_input.append(coarse_pr_2)
+        hidden_state4 = self.layer4(torch.cat(layer4_input, 1))
         p = self.p_layer(hidden_state4)
         alpha = self.alpha_layer(hidden_state4)
         beta = self.beta_layer(hidden_state4)
