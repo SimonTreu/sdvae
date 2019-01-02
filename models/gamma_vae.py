@@ -118,17 +118,17 @@ class Decoder(nn.Module):
                                    stride=2, padding=1)
         # all padding
         self.layer4 = self.conv(in_channels=nf_decoder * 2 + self.use_orog + self.coarse_layer4, out_channels=nf_decoder * 2,
-                      kernel_size=3, stride=1, padding=2)
+                      kernel_size=3, stride=1, padding=1)
 
         # layer 4 cannot be the output layer to enable a nonlinear relationship with topography
         self.p_layer = nn.Sequential(nn.Conv2d(in_channels=nf_decoder * 2, out_channels=1,
-                                                    kernel_size=3, stride=1, padding=0),
+                                                    kernel_size=3, stride=1, padding=1),
                                      nn.Sigmoid())
         self.alpha_layer = nn.Sequential(nn.Conv2d(in_channels=nf_decoder * 2, out_channels=1,
-                                                    kernel_size=3, stride=1, padding=0),
+                                                    kernel_size=3, stride=1, padding=1),
                                          Exp_Module())
         self.beta_layer = nn.Sequential(nn.Conv2d(in_channels=nf_decoder * 2, out_channels=1,
-                                                    kernel_size=3, stride=1, padding=0),
+                                                    kernel_size=3, stride=1, padding=1),
                                         Exp_Module())
 
     def forward(self, z, coarse_pr,
