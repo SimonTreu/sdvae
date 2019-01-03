@@ -6,7 +6,6 @@ from netCDF4 import Dataset
 from options.base_options import BaseOptions
 from datasets.climate_dataset import ClimateDataset
 from utils.upscale import Upscale
-from models.edgan import Edgan
 from models.gamma_vae import GammaVae
 
 
@@ -29,16 +28,9 @@ def main():
     large_cell = opt.fine_size + 2*opt.scale_factor
 
     # load the model
-    if opt.model == "mse_vae":
-        model = Edgan(opt=opt, device=device).to(device)
-        model.load_state_dict(torch.load(load_dir, map_location='cpu'))
-        model.eval()
-    elif opt.model == "gamma_vae":
-        model = GammaVae(opt=opt, device=device).to(device)
-        model.load_state_dict(torch.load(load_dir, map_location='cpu'))
-        model.eval()
-    else:
-        raise ValueError("model {} is not implemented".format(opt.model))
+    model = GammaVae(opt=opt, device=device).to(device)
+    model.load_state_dict(torch.load(load_dir, map_location='cpu'))
+    model.eval()
 
     # Iterate val cells and compute #n_samples reconstructions.
     index = 0
@@ -127,26 +119,22 @@ def main():
                 coarse_uas = upscaler.upscale(uas_tensor).unsqueeze(0).unsqueeze(0)
                 coarse_vas = upscaler.upscale(vas_tensor).unsqueeze(0).unsqueeze(0)
 
-                if opt.model == "mse_vae":
-                    for k in range(n_samples):
-                        with torch.no_grad():
-                            recon_pr = model.decode(z=torch.randn(1, opt.nz, 1, 1, device=device),
-                                                    coarse_pr=coarse_pr, coarse_uas=coarse_uas,
-                                                    coarse_vas=coarse_vas, orog=orog_tensor)
-
-                            output_dataset['downscaled_pr_{}'.format(k)][t, opt.scale_factor:-opt.scale_factor,
-                            opt.scale_factor:-opt.scale_factor] = recon_pr
-                elif opt.model == "gamma_vae":
-                    for k in range(n_samples):
-                        with torch.no_grad():
-                            p, alpha, beta = model.decode(z=torch.randn(1, opt.nz, 1, 1, device=device),
-                                                    coarse_pr=coarse_pr, coarse_uas=coarse_uas,
-                                                    coarse_vas=coarse_vas, orog=orog_tensor)
-
-                            output_dataset['downscaled_pr_{}'.format(k)][t, opt.scale_factor:-opt.scale_factor,
-                            opt.scale_factor:-opt.scale_factor] = torch.nn.Threshold(0.01,0)(p*alpha*beta) #todo is this threshold reasonable?  # Expected value of the mixed gamma distribution
-                else:
-                    raise ValueError("model {} is not implemented".format(opt.model))
+                for k in range(n_samples):
+                    with torch.no_grad():
+                        recon_pr = model.decode(z=torch.randn(1, opt.nz, 1, 1, device=device),
+                                                coarse_pr=coarse_pr, coarse_uas=coarse_uas,
+                                                coarse_vas=coarse_vas, orog=orog_tensor)
+                    if opt.model == "mse_vae":
+                        output_dataset['downscaled_pr_{}'.format(k)][t, opt.scale_factor:-opt.scale_factor,
+                        opt.scale_factor:-opt.scale_factor] = recon_pr
+                    elif opt.model == "gamma_vae":
+                        output_dataset['downscaled_pr_{}'.format(k)][t, opt.scale_factor:-opt.scale_factor,
+                        opt.scale_factor:-opt.scale_factor] = torch.nn.Threshold(0.01,0)(recon_pr['p']*
+                                                                                         recon_pr['alpha']*
+                                                                                         recon_pr['beta'])
+                        #todo is this threshold reasonable?  # Expected value of the mixed gamma distribution
+                    else:
+                        raise ValueError("model {} is not implemented".format(opt.model))
 
 
                 upsample = torch.nn.Upsample(scale_factor=opt.scale_factor, mode='bilinear')

@@ -13,6 +13,7 @@ class GammaVae(nn.Module):
         self.use_orog = not opt.no_orog
         self.no_dropout = opt.no_dropout
         self.nf_encoder = opt.nf_encoder
+        self.model = opt.model
 
         self.h_layer1 = self.down_conv(in_channels=1 + self.use_orog, out_channels=self.nf_encoder,
                                        kernel_size=3, padding=1, stride=1)
@@ -43,7 +44,7 @@ class GammaVae(nn.Module):
         log_var = self.log_var(h_layer3.view(h_layer3.shape[0], -1)).unsqueeze(-1).unsqueeze(-1)
         z = self.reparameterize(mu, log_var)
 
-        return (*self.decode(z=z, coarse_pr=coarse_pr,
+        return (self.decode(z=z, coarse_pr=coarse_pr,
                              orog=orog, coarse_uas=coarse_uas, coarse_vas=coarse_vas
                              )), mu.view(-1, self.nz), log_var.view(-1, self.nz)
 
@@ -55,15 +56,22 @@ class GammaVae(nn.Module):
         else:
             return mu
 
-    def loss_function(self, p, alpha, beta, x, mu, log_var, coarse_pr,):
+    def loss_function(self, recon_x, x, mu, log_var, coarse_pr,):
         # negative log predictive density
-        nlpd = self._neg_log_gamma_likelihood(x, alpha, beta, p)
+        if self.model == 'gamma_vae':
+            nlpd = self._neg_log_gamma_likelihood(x, recon_x['alpha'], recon_x['beta'], recon_x['p'])
+        elif self.model == 'mse_vae':
+            nlpd = nn.functional.mse_loss(recon_x, x, size_average=False)/x.shape[0]
+
         # Kullback-Leibler Divergence
         kld = torch.mean(-0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp(),1))
         loss = kld + nlpd
 
         # not added to the total loss
-        coarse_recon = self.upscaler.upscale(p * alpha * beta)
+        if self.model == 'gamma_vae':
+            coarse_recon = self.upscaler.upscale(recon_x['p'] * recon_x['alpha'] * recon_x['beta'])
+        elif self.model == 'mse_vae':
+            coarse_recon = self.upscaler.upscale(recon_x)
         cycle_loss = nn.functional.mse_loss(coarse_pr[:,:,1:-1,1:-1], coarse_recon, size_average=True)
 
         return nlpd, kld, cycle_loss, loss
@@ -109,6 +117,7 @@ class Decoder(nn.Module):
         self.no_dropout = opt.no_dropout
         self.coarse_layer3 = not opt.no_coarse_layer3
         self.coarse_layer4 = not opt.no_coarse_layer4
+        self.model = opt.model
 
         self.layer1 = self.up_conv(in_channels=self.nz,out_channels=nf_decoder,kernel_size=6, stride=1, padding=0)
         self.layer2 = self.up_conv(in_channels=nf_decoder + 3,out_channels=nf_decoder * 2,
@@ -121,15 +130,24 @@ class Decoder(nn.Module):
                       kernel_size=3, stride=1, padding=1)
 
         # layer 4 cannot be the output layer to enable a nonlinear relationship with topography
-        self.p_layer = nn.Sequential(nn.Conv2d(in_channels=nf_decoder * 2, out_channels=1,
-                                                    kernel_size=3, stride=1, padding=1),
-                                     nn.Sigmoid())
-        self.alpha_layer = nn.Sequential(nn.Conv2d(in_channels=nf_decoder * 2, out_channels=1,
-                                                    kernel_size=3, stride=1, padding=1),
-                                         Exp_Module())
-        self.beta_layer = nn.Sequential(nn.Conv2d(in_channels=nf_decoder * 2, out_channels=1,
-                                                    kernel_size=3, stride=1, padding=1),
-                                        Exp_Module())
+
+        # output parameters for mixed bernoulli-gamma distribution
+        if self.model == 'gamma_vae':
+            self.p_layer = nn.Sequential(nn.Conv2d(in_channels=nf_decoder * 2, out_channels=1,
+                                                        kernel_size=3, stride=1, padding=1),
+                                         nn.Sigmoid())
+            self.alpha_layer = nn.Sequential(nn.Conv2d(in_channels=nf_decoder * 2, out_channels=1,
+                                                        kernel_size=3, stride=1, padding=1),
+                                             Exp_Module())
+            self.beta_layer = nn.Sequential(nn.Conv2d(in_channels=nf_decoder * 2, out_channels=1,
+                                                        kernel_size=3, stride=1, padding=1),
+                                            Exp_Module())
+
+        # output for normal noise process (mse loss function)
+        elif self.model == 'mse_vae':
+            self.output_layer = nn.Sequential(nn.Conv2d(in_channels=nf_decoder * 2, out_channels=1,
+                                                        kernel_size=3, stride=1, padding=1),
+                                              nn.Threshold(value=opt.threshold, threshold=opt.threshold))
 
     def forward(self, z, coarse_pr,
                 coarse_uas, coarse_vas, orog):
@@ -153,11 +171,17 @@ class Decoder(nn.Module):
         if self.coarse_layer4:
             layer4_input.append(coarse_pr_2)
         hidden_state4 = self.layer4(torch.cat(layer4_input, 1))
-        p = self.p_layer(hidden_state4)
-        alpha = self.alpha_layer(hidden_state4)
-        beta = self.beta_layer(hidden_state4)
 
-        return p, alpha, beta
+        if self.model == 'gamma_vae':
+            p = self.p_layer(hidden_state4)
+            alpha = self.alpha_layer(hidden_state4)
+            beta = self.beta_layer(hidden_state4)
+            return {'p': p, 'alpha': alpha, 'beta': beta}
+        elif self.model == 'mse_vae':
+            output = self.output_layer(hidden_state4)
+            return output
+        else:
+            raise ValueError("model {} is not implemented".format(self.model))
 
     def up_conv(self, in_channels,out_channels, kernel_size, stride, padding):
         if self.no_dropout:

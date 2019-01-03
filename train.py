@@ -1,6 +1,5 @@
 from datasets.climate_dataset import ClimateDataset
 from torch.utils.data import DataLoader
-from models.edgan import Edgan
 from models.gamma_vae import GammaVae
 from utils.visualizer import Visualizer
 
@@ -39,12 +38,7 @@ def main():
     val_data_loader = DataLoader(val_data, batch_size=opt.batch_size,shuffle=True,num_workers=int(opt.n_threads))
 
     # load the model
-    if opt.model == "mse_vae":
-        model = Edgan(opt=opt, device=device).to(device)
-    elif opt.model == "gamma_vae":
-        model = GammaVae(opt=opt, device=device).to(device)
-    else:
-        raise ValueError("model {} is not implemented".format(opt.model))
+    model = GammaVae(opt=opt, device=device).to(device)
 
     initial_epoch = 0
     if opt.load_epoch >= 0:
@@ -80,28 +74,15 @@ def main():
 
                 optimizer.zero_grad()
 
-                if opt.model == "mse_vae": # todo use the same model
-                    recon_pr, mu, log_var = model(fine_pr=data['fine_pr'].to(device),
-                                                  coarse_pr=data['coarse_pr'].to(device),
-                                                  orog=data['orog'].to(device),
-                                                  coarse_uas=data['coarse_uas'].to(device),
-                                                  coarse_vas=data['coarse_vas'].to(device))
+                recon_pr, mu, log_var = model(fine_pr=data['fine_pr'].to(device),
+                                              coarse_pr=data['coarse_pr'].to(device),
+                                              orog=data['orog'].to(device),
+                                              coarse_uas=data['coarse_uas'].to(device),
+                                              coarse_vas=data['coarse_vas'].to(device))
 
-                    mse, kld, cycle_loss, loss = model.loss_function(recon_pr, data['fine_pr'].to(device),
-                                                                     mu, log_var,
-                                                                     data['coarse_pr'].to(device))
-                elif opt.model == "gamma_vae":
-                    p, alpha, beta, mu, log_var = model(fine_pr=data['fine_pr'].to(device),
-                                                        coarse_pr=data['coarse_pr'].to(device),
-                                                        orog=data['orog'].to(device),
-                                                        coarse_uas=data['coarse_uas'].to(device),
-                                                        coarse_vas=data['coarse_vas'].to(device))
-
-                    mse, kld, cycle_loss, loss = model.loss_function(p, alpha, beta, data['fine_pr'].to(device),
-                                                                     mu, log_var,
-                                                                     data['coarse_pr'].to(device))
-                else:
-                    raise ValueError("model {} is not implemented".format(opt.model))
+                mse, kld, cycle_loss, loss = model.loss_function(recon_pr, data['fine_pr'].to(device),
+                                                                 mu, log_var,
+                                                                 data['coarse_pr'].to(device))
 
                 if loss.item() < float('inf'):
                     loss.backward()
@@ -137,7 +118,9 @@ def main():
                     if opt.model == "mse_vae":
                         viz.plot(fine_pr=data['fine_pr'].to(device), recon_pr=recon_pr, image_name=image_name)
                     elif opt.model == "gamma_vae":
-                        viz.plot(fine_pr=data['fine_pr'].to(device), recon_pr=p*alpha*beta, image_name=image_name)
+                        viz.plot(fine_pr=data['fine_pr'].to(device),
+                                 recon_pr=recon_pr['p']*recon_pr['alpha']*recon_pr['beta'],
+                                 image_name=image_name)
                     else:
                         raise ValueError("model {} is not implemented".format(opt.model))
 
@@ -152,12 +135,12 @@ def main():
                     val_loss_sum = np.zeros(4)  # val_mse, val_kld, val_cycle_loss, val_loss
                     inf_losses = 0  # nr of sets where loss was inf
                     for batch_idx, data in enumerate(val_data_loader, 0):
-                        p, alpha, beta, mu, log_var = model(fine_pr=data['fine_pr'].to(device),
+                        recon_pr, mu, log_var = model(fine_pr=data['fine_pr'].to(device),
                                                             coarse_pr=data['coarse_pr'].to(device),
                                                             orog=data['orog'].to(device), 
                                                             coarse_uas=data['coarse_uas'].to(device), 
                                                             coarse_vas=data['coarse_vas'].to(device))
-                        val_loss = model.loss_function(p, alpha, beta,data['fine_pr'].to(device),
+                        val_loss = model.loss_function(recon_pr,data['fine_pr'].to(device),
                                                        mu, log_var,
                                                        data['coarse_pr'].to(device))
                         val_loss = [l.item() for l in val_loss]
@@ -165,7 +148,7 @@ def main():
                             val_loss_sum += val_loss
                         else:
                             inf_losses += 1
-                        if batch_idx >= opt.eval_val_loss:  # todo find a good break value, make shure that it is differen
+                        if batch_idx >= opt.eval_val_loss:
                             break
 
                     n_val = opt.eval_val_loss - inf_losses
