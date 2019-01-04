@@ -38,7 +38,7 @@ def main():
     input_dataset = Dataset(os.path.join(opt.dataroot, 'dataset.nc4'), "r", format="NETCDF4")
     for idx_lat in range(climate_data.rows):
         for idx_lon in climate_data.lat_lon_list[idx_lat]:
-            # calculate upper left index for cell with boundary values to downscale #todo better formulation
+            # calculate upper left index for cell with boundary values to downscale
             anchor_lat = idx_lat * climate_data.cell_size  + climate_data.scale_factor
             anchor_lon = idx_lon * climate_data.cell_size
             # select indices for a 48 x 48 box around the 32 x 32 box to be downscaled (with boundary values)
@@ -96,6 +96,7 @@ def main():
             output_dataset['pr'][:] = input_dataset['pr'][:, large_cell_lats, large_cell_lons]
             for k in range(n_samples):
                 output_dataset['downscaled_pr_{}'.format(k)][:] = input_dataset['pr'][:, large_cell_lats, large_cell_lons]
+            output_dataset['bilinear_downscaled_pr'][:] = input_dataset['pr'][:, large_cell_lats, large_cell_lons]
 
             output_dataset['uas'][:] = input_dataset['uas'][:, large_cell_lats, large_cell_lons]
             output_dataset['vas'][:] = input_dataset['vas'][:, large_cell_lats, large_cell_lons]
@@ -136,12 +137,13 @@ def main():
                     else:
                         raise ValueError("model {} is not implemented".format(opt.model))
 
-
-                upsample = torch.nn.Upsample(scale_factor=opt.scale_factor, mode='bilinear')
-                # todo align_corners=True?
-                # todo upsample the complete image and then take only the necessary part
-                bilinear_pr = upsample(coarse_pr[:, :, 1:-1, 1:-1])
-                output_dataset['bilinear_downscaled_pr'][t, opt.scale_factor:-opt.scale_factor, opt.scale_factor:-opt.scale_factor] = bilinear_pr
+                bilinear_pr = torch.nn.functional.upsample(coarse_pr,scale_factor=opt.scale_factor,
+                                                           mode='bilinear',
+                                                           align_corners=True)
+                output_dataset['bilinear_downscaled_pr'][t,
+                opt.scale_factor:-opt.scale_factor,
+                opt.scale_factor:-opt.scale_factor] = bilinear_pr[0, 0, opt.scale_factor:-opt.scale_factor,
+                opt.scale_factor:-opt.scale_factor]
 
             # read out the variables
             # create reanalysis result (croped to 32*32)
