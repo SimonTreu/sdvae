@@ -15,20 +15,25 @@ class GammaVae(nn.Module):
         self.nf_encoder = opt.nf_encoder
         self.model = opt.model
 
+        # dimensions for batch_size=64, nf_encoder=16, fine_size=32, nz=10
+        # 64x1x32x32 if no orog, else 64x2x32x32
         self.h_layer1 = self.down_conv(in_channels=1 + self.use_orog, out_channels=self.nf_encoder,
                                        kernel_size=3, padding=1, stride=1)
-
+        # 64x16x16x16
         self.h_layer2 = self.down_conv(in_channels=self.nf_encoder, out_channels=self.nf_encoder * 2,
                                        kernel_size=4, padding=0, stride=1)
-
+        # 64x32x6x6
         self.h_layer3 = self.down_conv(in_channels=2 * self.nf_encoder + 3, out_channels=self.nf_encoder * 3,
                                                 kernel_size=3, padding=1, stride=1)
+        # 64x48x3x3
 
         # mu
         self.mu = nn.Sequential(nn.Linear(in_features=self.nf_encoder * 3 * 9, out_features=self.nz))
+        # 64x10x1x1
 
         # log_var
         self.log_var = nn.Sequential(nn.Linear(in_features=self.nf_encoder * 3 * 9, out_features=self.nz))
+        # 64x10x1x1
 
         self.decode = Decoder(opt)
 
@@ -119,16 +124,21 @@ class Decoder(nn.Module):
         self.coarse_layer4 = not opt.no_coarse_layer4
         self.model = opt.model
 
+        # dimensions for batch_size=64, nf_encoder=, fine_size=32, nz=10
+        # 64x10x1x1
         self.layer1 = self.up_conv(in_channels=self.nz,out_channels=nf_decoder,kernel_size=6, stride=1, padding=0)
+        # 64x16x6x6
         self.layer2 = self.up_conv(in_channels=nf_decoder + 3,out_channels=nf_decoder * 2,
                                    kernel_size=3,stride=3, padding=1)
+        # 64x32x16x16
         self.layer3 = self.up_conv(in_channels=nf_decoder * 2 + self.coarse_layer3,
                                    out_channels=nf_decoder * 2, kernel_size=4,
                                    stride=2, padding=1)
+        # 64x32x32x32
         # all padding
         self.layer4 = self.conv(in_channels=nf_decoder * 2 + self.use_orog + self.coarse_layer4, out_channels=nf_decoder * 2,
                       kernel_size=3, stride=1, padding=1)
-
+        # 64x32x32x32
         # layer 4 cannot be the output layer to enable a nonlinear relationship with topography
 
         # output parameters for mixed bernoulli-gamma distribution
