@@ -186,7 +186,7 @@ class Decoder(nn.Module):
         elif self.model == 'mse_vae':
             self.output_layer = nn.Sequential(nn.Conv2d(in_channels=nf_decoder * 2, out_channels=1,
                                                         kernel_size=3, stride=1, padding=1),
-                                              nn.Threshold(value=opt.threshold, threshold=opt.threshold))
+                                              nn.ReLU())
 
     def forward(self, z, coarse_pr,
                 coarse_uas, coarse_vas, orog):

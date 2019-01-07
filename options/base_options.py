@@ -111,8 +111,4 @@ class BaseOptions:
         if len(opt.gpu_ids) > 0:
             torch.cuda.set_device(opt.gpu_ids[0])
 
-        if opt.model == "mse_vae":
-            with Dataset(os.path.join(opt.dataroot, "threshold.nc4"), "r", format="NETCDF4") as rootgrp:
-                opt.threshold = float(rootgrp['pr'][0])
-
         return opt
