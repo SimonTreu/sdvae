@@ -23,14 +23,16 @@ class GammaVae(nn.Module):
 
         # dimensions for batch_size=64, nf_encoder=16, fine_size=32, nz=10, orog=True, coarse_layer3 = True, coarse_layer4 = True
         # 64x5x32x32
-        self.h_layer1 = self._down_conv(in_channels=1 + self.use_orog + self.coarse_layer4 * 3, out_channels=self.nf_encoder,
+        self.h_layer1 = self._down_conv(in_channels=1 + self.use_orog + self.coarse_layer4 * 4,
+                                        out_channels=self.nf_encoder,
                                         kernel_size=3, padding=1, stride=1)
         # 64x20x16x16
-        self.h_layer2 = self._down_conv(in_channels=self.nf_encoder + self.use_orog + self.coarse_layer3 * 3,
+        self.h_layer2 = self._down_conv(in_channels=self.nf_encoder + self.use_orog + self.coarse_layer3 * 4,
                                         out_channels=self.nf_encoder * 2,
                                         kernel_size=4, padding=0, stride=1)
         # 64x35x6x6
-        self.h_layer3 = self._down_conv(in_channels=2 * self.nf_encoder + 3, out_channels=self.nf_encoder * 3,
+        self.h_layer3 = self._down_conv(in_channels=2 * self.nf_encoder + 4
+                                        , out_channels=self.nf_encoder * 3,
                                         kernel_size=3, padding=1, stride=1)
         # 64x48x3x3
 
@@ -44,40 +46,43 @@ class GammaVae(nn.Module):
 
         self.decode = Decoder(opt, device)
 
-    def forward(self, fine_pr, coarse_pr, orog, coarse_uas, coarse_vas):
+    def forward(self, fine_pr, coarse_pr, orog, coarse_uas, coarse_vas, coarse_psl):
         # layer 1
         upsample32 = torch.nn.Upsample(scale_factor=self.scale_factor, mode='nearest')
         coarse_pr_32 = upsample32(coarse_pr[:, :, 1:-1, 1:-1])
         coarse_uas_32 = upsample32(coarse_uas[:, :, 1:-1, 1:-1])
         coarse_vas_32 = upsample32(coarse_vas[:, :, 1:-1, 1:-1])
+        coarse_psl_32 = upsample32(coarse_psl[:, :, 1:-1, 1:-1])
         input_layer_input = [fine_pr]
         if self.use_orog:
             input_layer_input.append(orog)
         if self.coarse_layer4:  # todo rename to coarse 32
-            input_layer_input += [coarse_pr_32, coarse_uas_32, coarse_vas_32]
+            input_layer_input += [coarse_pr_32, coarse_uas_32, coarse_vas_32, coarse_psl_32]
         h_layer1 = self.h_layer1(torch.cat(input_layer_input, 1))
         # layer 2
         upsample16 = torch.nn.Upsample(scale_factor=self.scale_factor // 2, mode='nearest')
         coarse_pr_16 = upsample16(coarse_pr[:, :, 1:-1, 1:-1])
         coarse_uas_16 = upsample16(coarse_uas[:, :, 1:-1, 1:-1])
         coarse_vas_16 = upsample16(coarse_vas[:, :, 1:-1, 1:-1])
+        coarse_psl_16 = upsample16(coarse_psl[:, :, 1:-1, 1:-1])
         upscale16 = Upscale(size=self.fine_size, scale_factor=2, device=self.device)
         orog16 = upscale16.upscale(orog)
         layer2_input = [h_layer1]
         if self.use_orog:
             layer2_input.append(orog16)
         if self.coarse_layer3:
-            layer2_input += [coarse_pr_16, coarse_uas_16, coarse_vas_16]
+            layer2_input += [coarse_pr_16, coarse_uas_16, coarse_vas_16, coarse_psl_16]
         h_layer2 = self.h_layer2(torch.cat(layer2_input, 1))
         # layer 3
-        h_layer3 = self.h_layer3(torch.cat((h_layer2, coarse_pr, coarse_uas, coarse_vas), 1))
+        h_layer3 = self.h_layer3(torch.cat((h_layer2, coarse_pr, coarse_uas, coarse_vas, coarse_psl), 1))
         # output layer
         mu = self.mu(h_layer3.view(h_layer3.shape[0], -1)).unsqueeze(-1).unsqueeze(-1)
         log_var = self.log_var(h_layer3.view(h_layer3.shape[0], -1)).unsqueeze(-1).unsqueeze(-1)
         # reparameterization
         z = self._reparameterize(mu, log_var)
         # decode
-        recon_pr = self.decode(z=z, coarse_pr=coarse_pr,orog=orog, coarse_uas=coarse_uas, coarse_vas=coarse_vas)
+        recon_pr = self.decode(z=z, coarse_pr=coarse_pr,orog=orog,
+                               coarse_uas=coarse_uas, coarse_vas=coarse_vas, coarse_psl=coarse_psl)
         return recon_pr, mu.view(-1, self.nz), log_var.view(-1, self.nz)
 
     def loss_function(self, recon_x, x, mu, log_var, coarse_pr,):
@@ -157,15 +162,15 @@ class Decoder(nn.Module):
         # 64x10x1x1
         self.layer1 = self._up_conv(in_channels=self.nz, out_channels=nf_decoder, kernel_size=6, stride=1, padding=0)
         # 64x19x6x6
-        self.layer2 = self._up_conv(in_channels=nf_decoder + 3, out_channels=nf_decoder * 2,
+        self.layer2 = self._up_conv(in_channels=nf_decoder + 4, out_channels=nf_decoder * 2,
                                     kernel_size=3, stride=3, padding=1)
         # 64x36x16x16
-        self.layer3 = self._up_conv(in_channels=nf_decoder * 2 + self.use_orog + self.coarse_layer3 * 3,
+        self.layer3 = self._up_conv(in_channels=nf_decoder * 2 + self.use_orog + self.coarse_layer3 * 4,
                                     out_channels=nf_decoder * 2, kernel_size=4,
                                     stride=2, padding=1)
         # 64x36x32x32
         # all padding
-        self.layer4 = self._conv(in_channels=nf_decoder * 2 + self.use_orog + self.coarse_layer4 * 3, out_channels=nf_decoder * 2,
+        self.layer4 = self._conv(in_channels=nf_decoder * 2 + self.use_orog + self.coarse_layer4 * 4, out_channels=nf_decoder * 2,
                                  kernel_size=3, stride=1, padding=1)
         # 64x32x32x32
         # layer 4 cannot be the output layer to enable a nonlinear relationship with topography
@@ -189,34 +194,36 @@ class Decoder(nn.Module):
                                               nn.ReLU())
 
     def forward(self, z, coarse_pr,
-                coarse_uas, coarse_vas, orog):
+                coarse_uas, coarse_vas, orog, coarse_psl):
         # layer 1
         hidden_state = self.layer1(z)
         # layer 2
-        hidden_state2 = self.layer2(torch.cat((hidden_state, coarse_pr, coarse_uas, coarse_vas), 1))
+        hidden_state2 = self.layer2(torch.cat((hidden_state, coarse_pr, coarse_uas, coarse_vas, coarse_psl), 1))
         # layer 3
         upsample16 = torch.nn.Upsample(scale_factor=self.scale_factor // 2, mode='nearest')
         coarse_pr_16 = upsample16(coarse_pr[:, :, 1:-1, 1:-1])
         coarse_uas_16 = upsample16(coarse_uas[:, :, 1:-1, 1:-1])
         coarse_vas_16 = upsample16(coarse_vas[:, :, 1:-1, 1:-1])
+        coarse_psl_16 = upsample16(coarse_psl[:, :, 1:-1, 1:-1])
         upscale16 = Upscale(size=self.fine_size, scale_factor=2, device=self.device)
         orog16 = upscale16.upscale(orog)
         layer3_input = [hidden_state2]
         if self.use_orog:
             layer3_input.append(orog16)
         if self.coarse_layer3:
-            layer3_input += [coarse_pr_16, coarse_uas_16, coarse_vas_16]
+            layer3_input += [coarse_pr_16, coarse_uas_16, coarse_vas_16, coarse_psl_16]
         hidden_state3 = self.layer3(torch.cat(layer3_input,1))
         # layer 4
         upsample32 = torch.nn.Upsample(scale_factor=self.scale_factor, mode='nearest')
         coarse_pr_32 = upsample32(coarse_pr[:, :, 1:-1, 1:-1])
         coarse_uas_32 = upsample32(coarse_uas[:, :, 1:-1, 1:-1])
         coarse_vas_32 = upsample32(coarse_vas[:, :, 1:-1, 1:-1])
+        coarse_psl_32 = upsample32(coarse_psl[:, :, 1:-1, 1:-1])
         layer4_input = [hidden_state3]
         if self.use_orog:
             layer4_input.append(orog)
         if self.coarse_layer4:
-            layer4_input += [coarse_pr_32, coarse_uas_32, coarse_vas_32]
+            layer4_input += [coarse_pr_32, coarse_uas_32, coarse_vas_32, coarse_psl_32]
         hidden_state4 = self.layer4(torch.cat(layer4_input, 1))
         # output layer
         if self.model == 'gamma_vae':

@@ -100,12 +100,14 @@ def main():
 
             output_dataset['uas'][:] = input_dataset['uas'][:, large_cell_lats, large_cell_lons]
             output_dataset['vas'][:] = input_dataset['vas'][:, large_cell_lats, large_cell_lons]
+            output_dataset['psl'][:] = input_dataset['psl'][:, large_cell_lats, large_cell_lons]
 
             # read out the variables similar to construct_datasets.py
             pr = output_dataset['pr'][:]
 
             uas = output_dataset['uas'][:]
             vas = output_dataset['vas'][:]
+            psl = output_dataset['psl'][:]
             orog = output_dataset['orog'][:]
 
             times = pr.shape[0]
@@ -115,16 +117,19 @@ def main():
                                            opt.scale_factor:-opt.scale_factor], dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
                 uas_tensor = torch.tensor(uas[t, :, :], dtype=torch.float32, device=device)
                 vas_tensor = torch.tensor(vas[t, :, :], dtype=torch.float32, device=device)
+                psl_tensor = torch.tensor(psl[t, :, :], dtype=torch.float32, device=device)
 
                 coarse_pr = upscaler.upscale(pr_tensor).unsqueeze(0).unsqueeze(0)
                 coarse_uas = upscaler.upscale(uas_tensor).unsqueeze(0).unsqueeze(0)
                 coarse_vas = upscaler.upscale(vas_tensor).unsqueeze(0).unsqueeze(0)
+                coarse_psl = upscaler.upscale(psl_tensor).unsqueeze(0).unsqueeze(0)
 
                 for k in range(n_samples):
                     with torch.no_grad():
                         recon_pr = model.decode(z=torch.randn(1, opt.nz, 1, 1, device=device),
                                                 coarse_pr=coarse_pr, coarse_uas=coarse_uas,
-                                                coarse_vas=coarse_vas, orog=orog_tensor)
+                                                coarse_vas=coarse_vas, orog=orog_tensor,
+                                                coarse_psl=coarse_psl)
                     if opt.model == "mse_vae":
                         output_dataset['downscaled_pr_{}'.format(k)][t, opt.scale_factor:-opt.scale_factor,
                         opt.scale_factor:-opt.scale_factor] = recon_pr

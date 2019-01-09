@@ -74,10 +74,12 @@ class ClimateDataset(Dataset):
             orog = torch.tensor(file['orog'][lats, lons],  dtype=torch.float)
             uas = torch.tensor(file['uas'][t, boundary_lats, boundary_lons], dtype=torch.float)
             vas = torch.tensor(file['vas'][t, boundary_lats, boundary_lons], dtype=torch.float)
+            psl = torch.tensor(file['psl'][t, boundary_lats, boundary_lons], dtype=torch.float)
         # --------------------------------------------------------------------------------------------------------------
         coarse_pr = self.upscaler.upscale(pr)
         coarse_uas = self.upscaler.upscale(uas)
         coarse_vas = self.upscaler.upscale(vas)
+        coarse_psl = self.upscaler.upscale(psl)
 
         fine_pr = pr[self.scale_factor:-self.scale_factor, self.scale_factor:-self.scale_factor]
 
@@ -87,11 +89,13 @@ class ClimateDataset(Dataset):
         coarse_pr.unsqueeze_(0)
         coarse_uas.unsqueeze_(0)
         coarse_vas.unsqueeze_(0)
+        coarse_psl.unsqueeze_(0)
 
         end_time = time.time() - start_time
 
         return {'fine_pr': fine_pr, 'coarse_pr': coarse_pr,
-                'orog': orog, 'coarse_uas': coarse_uas, 'coarse_vas': coarse_vas,
+                'orog': orog, 'coarse_uas': coarse_uas,
+                'coarse_vas': coarse_vas, 'coarse_psl': coarse_psl,
                 'time': end_time}
 
 

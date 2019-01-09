@@ -78,7 +78,8 @@ def main():
                                               coarse_pr=data['coarse_pr'].to(device),
                                               orog=data['orog'].to(device),
                                               coarse_uas=data['coarse_uas'].to(device),
-                                              coarse_vas=data['coarse_vas'].to(device))
+                                              coarse_vas=data['coarse_vas'].to(device),
+                                              coarse_psl=data['coarse_psl'].to(device))
 
                 mse, kld, cycle_loss, loss = model.loss_function(recon_pr, data['fine_pr'].to(device),
                                                                  mu, log_var,
@@ -136,10 +137,11 @@ def main():
                     inf_losses = 0  # nr of sets where loss was inf
                     for batch_idx, data in enumerate(val_data_loader, 0):
                         recon_pr, mu, log_var = model(fine_pr=data['fine_pr'].to(device),
-                                                            coarse_pr=data['coarse_pr'].to(device),
-                                                            orog=data['orog'].to(device), 
-                                                            coarse_uas=data['coarse_uas'].to(device), 
-                                                            coarse_vas=data['coarse_vas'].to(device))
+                                                      coarse_pr=data['coarse_pr'].to(device),
+                                                      orog=data['orog'].to(device),
+                                                      coarse_uas=data['coarse_uas'].to(device),
+                                                      coarse_vas=data['coarse_vas'].to(device),
+                                                      coarse_psl=data['coarse_psl'].to(device))
                         val_loss = model.loss_function(recon_pr,data['fine_pr'].to(device),
                                                        mu, log_var,
                                                        data['coarse_pr'].to(device))
