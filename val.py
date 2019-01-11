@@ -135,10 +135,10 @@ def main():
                         opt.scale_factor:-opt.scale_factor] = recon_pr
                     elif opt.model == "gamma_vae":
                         output_dataset['downscaled_pr_{}'.format(k)][t, opt.scale_factor:-opt.scale_factor,
-                        opt.scale_factor:-opt.scale_factor] = torch.nn.Threshold(0.01,0)(recon_pr['p']*
+                        opt.scale_factor:-opt.scale_factor] = torch.nn.Threshold(0.035807043601739474,0)(recon_pr['p']*
                                                                                          recon_pr['alpha']*
                                                                                          recon_pr['beta'])
-                        #todo is this threshold reasonable?  # Expected value of the mixed gamma distribution
+                        #todo don't hardcode threshold  # Expected value of the mixed gamma distribution
                     else:
                         raise ValueError("model {} is not implemented".format(opt.model))
 
