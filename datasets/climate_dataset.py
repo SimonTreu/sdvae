@@ -38,7 +38,7 @@ class ClimateDataset(Dataset):
         return self.length
 
     def __getitem__(self, index):
-        start_time = time.time()
+        start_time = time.time() # todo remove timing
 
         # ++ calculate lat lon and time from index ++ #
         s_lat = len(self.lat_lon_list)
@@ -63,15 +63,11 @@ class ClimateDataset(Dataset):
         # longitudes might cross the prime meridian
         boundary_lons = [i % 720
                          for i in range(anchor_lon-self.scale_factor, anchor_lon+self.fine_size+self.scale_factor)]
-
-        # select indices for a 32 x 32 simulation cell
-        lats = [i for i in range(anchor_lat, anchor_lat + self.fine_size)]
-        lons = [i % 720 for i in range(anchor_lon, anchor_lon + self.fine_size)]
         # --------------------------------------------------------------------------------------------------------------
         # ++ read data ++ #
         with Nc4Dataset(os.path.join(self.root, "dataset.nc4"), "r", format="NETCDF4") as file:
             pr = torch.tensor(file['pr'][t, boundary_lats, boundary_lons], dtype=torch.float)
-            orog = torch.tensor(file['orog'][lats, lons],  dtype=torch.float)
+            orog = torch.tensor(file['orog'][boundary_lats, boundary_lats],  dtype=torch.float)
             uas = torch.tensor(file['uas'][t, boundary_lats, boundary_lons], dtype=torch.float)
             vas = torch.tensor(file['vas'][t, boundary_lats, boundary_lons], dtype=torch.float)
             psl = torch.tensor(file['psl'][t, boundary_lats, boundary_lons], dtype=torch.float)
@@ -81,10 +77,8 @@ class ClimateDataset(Dataset):
         coarse_vas = self.upscaler.upscale(vas)
         coarse_psl = self.upscaler.upscale(psl)
 
-        fine_pr = pr[self.scale_factor:-self.scale_factor, self.scale_factor:-self.scale_factor]
-
         # bring all into shape [C,W,H] (Channels, With, Height)
-        fine_pr.unsqueeze_(0)
+        pr.unsqueeze_(0)
         orog.unsqueeze_(0)
         coarse_pr.unsqueeze_(0)
         coarse_uas.unsqueeze_(0)
@@ -93,7 +87,7 @@ class ClimateDataset(Dataset):
 
         end_time = time.time() - start_time
 
-        return {'fine_pr': fine_pr, 'coarse_pr': coarse_pr,
+        return {'fine_pr': pr, 'coarse_pr': coarse_pr,
                 'orog': orog, 'coarse_uas': coarse_uas,
                 'coarse_vas': coarse_vas, 'coarse_psl': coarse_psl,
                 'time': end_time}

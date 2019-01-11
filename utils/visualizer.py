@@ -41,9 +41,9 @@ class Visualizer:
         fig, axes = plt.subplots(2, self.n_images, sharex='col', sharey='row')
         rand_idx = np.random.randint(0, self.opt.batch_size, self.n_images)
         for i in range(self.n_images):
-            axes[0, i].imshow(fine_pr[rand_idx[i]].view(self.fine_size, self.fine_size).cpu().detach().numpy(), vmin=vmin, vmax=vmax,
+            axes[0, i].imshow(fine_pr[rand_idx[i]].view(48, 48).cpu().detach().numpy(), vmin=vmin, vmax=vmax,
                               cmap=plt.get_cmap('jet'))
-            axes[1, i].imshow(recon_pr[rand_idx[i]].view(self.fine_size, self.fine_size).cpu().detach().numpy(), vmin=vmin, vmax=vmax,
+            axes[1, i].imshow(recon_pr[rand_idx[i]].view(48, 48).cpu().detach().numpy(), vmin=vmin, vmax=vmax,
                               cmap=plt.get_cmap('jet'))
 
         axes[0, 0].set_title('Original Precipitation')
