@@ -14,7 +14,7 @@ def main():
     opt = BaseOptions().parse()
     n_samples = opt.n_samples
     device = torch.device("cuda" if len(opt.gpu_ids) > 0 else "cpu")
-    upscaler = Upscale(size=opt.fine_size+2*opt.scale_factor, scale_factor=opt.scale_factor, device=device)
+    upscaler = Upscale(size=48, scale_factor=opt.scale_factor, device=device)
     load_root = os.path.join('checkpoints', opt.name)
     load_epoch = opt.load_epoch if opt.load_epoch >= 0 else 'latest'
     load_name = "epoch_{}.pth".format(load_epoch)
@@ -90,7 +90,6 @@ def main():
             output_dataset['lat'][:] = input_dataset['lat'][large_cell_lats]
             output_dataset['lon'][:] = input_dataset['lon'][large_cell_lons]
             output_dataset['time'][:] = input_dataset['time'][:]
-            # crop to 32x32
 
             output_dataset['orog'][:] = input_dataset['orog'][large_cell_lats, large_cell_lons]
             output_dataset['pr'][:] = input_dataset['pr'][:, large_cell_lats, large_cell_lons]
@@ -113,8 +112,7 @@ def main():
             times = pr.shape[0]
             for t in range(times):
                 pr_tensor = torch.tensor(pr[t, :, :], dtype=torch.float32, device=device)
-                orog_tensor = torch.tensor(orog[opt.scale_factor:-opt.scale_factor,
-                                           opt.scale_factor:-opt.scale_factor], dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
+                orog_tensor = torch.tensor(orog[:,:], dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
                 uas_tensor = torch.tensor(uas[t, :, :], dtype=torch.float32, device=device)
                 vas_tensor = torch.tensor(vas[t, :, :], dtype=torch.float32, device=device)
                 psl_tensor = torch.tensor(psl[t, :, :], dtype=torch.float32, device=device)
@@ -131,13 +129,10 @@ def main():
                                                 coarse_vas=coarse_vas, orog=orog_tensor,
                                                 coarse_psl=coarse_psl)
                     if opt.model == "mse_vae":
-                        output_dataset['downscaled_pr_{}'.format(k)][t, opt.scale_factor:-opt.scale_factor,
-                        opt.scale_factor:-opt.scale_factor] = recon_pr
+                        output_dataset['downscaled_pr_{}'.format(k)][t, :, :] = recon_pr
                     elif opt.model == "gamma_vae":
-                        output_dataset['downscaled_pr_{}'.format(k)][t, opt.scale_factor:-opt.scale_factor,
-                        opt.scale_factor:-opt.scale_factor] = torch.nn.Threshold(0.035807043601739474,0)(recon_pr['p']*
-                                                                                         recon_pr['alpha']*
-                                                                                         recon_pr['beta'])
+                        output_dataset['downscaled_pr_{}'.format(k)][t, :, :] = \
+                            torch.nn.Threshold(0.035807043601739474,0)(recon_pr['p']*recon_pr['alpha']*recon_pr['beta'])
                         #todo don't hardcode threshold  # Expected value of the mixed gamma distribution
                     else:
                         raise ValueError("model {} is not implemented".format(opt.model))
@@ -145,10 +140,7 @@ def main():
                 bilinear_pr = torch.nn.functional.upsample(coarse_pr,scale_factor=opt.scale_factor,
                                                            mode='bilinear',
                                                            align_corners=True)
-                output_dataset['bilinear_downscaled_pr'][t,
-                opt.scale_factor:-opt.scale_factor,
-                opt.scale_factor:-opt.scale_factor] = bilinear_pr[0, 0, opt.scale_factor:-opt.scale_factor,
-                opt.scale_factor:-opt.scale_factor]
+                output_dataset['bilinear_downscaled_pr'][t, :, :] = bilinear_pr[0, 0, :, :]
 
             # read out the variables
             # create reanalysis result (croped to 32*32)
