@@ -14,24 +14,22 @@ class GammaVae(nn.Module):
         self.no_dropout = opt.no_dropout
         self.nf_encoder = opt.nf_encoder
         self.model = opt.model
-        self.coarse_layer3 = not opt.no_coarse_layer3
-        self.coarse_layer4 = not opt.no_coarse_layer4
         self.scale_factor = opt.scale_factor
         self.fine_size = opt.fine_size
         self.device = device
 
 
-        # dimensions for batch_size=64, nf_encoder=16, fine_size=32, nz=10, orog=True, coarse_layer3 = True, coarse_layer4 = True
+        # dimensions for batch_size=64, nf_encoder=16, fine_size=32, nz=10, orog=True
         # 64x5x48x48
-        self.h_layer1 = self._down_conv(in_channels=1 + self.use_orog + self.coarse_layer4 * 4,
+        self.h_layer1 = self._down_conv(in_channels=1 + self.use_orog + 4,
                                         out_channels=self.nf_encoder,
                                         kernel_size=3, padding=1, stride=1)
         # 64x20x24x24
-        self.h_layer2 = self._down_conv(in_channels=self.nf_encoder + self.use_orog + self.coarse_layer3 * 4,
+        self.h_layer2 = self._down_conv(in_channels=self.nf_encoder + self.use_orog + 4,
                                         out_channels=self.nf_encoder * 2,
                                         kernel_size=3, padding=1, stride=1)
         # 64x20x12x12
-        self.h_layer3 = self._down_conv(in_channels=self.nf_encoder*2 + self.use_orog + self.coarse_layer3 * 4,
+        self.h_layer3 = self._down_conv(in_channels=self.nf_encoder*2 + self.use_orog + 4,
                                         out_channels=self.nf_encoder * 3,
                                         kernel_size=3, padding=1, stride=1)
         # 64x35x6x6
@@ -169,8 +167,6 @@ class Decoder(nn.Module):
         self.input_size = opt.fine_size ** 2
         self.fine_size = opt.fine_size
         self.no_dropout = opt.no_dropout
-        self.coarse_layer3 = not opt.no_coarse_layer3
-        self.coarse_layer4 = not opt.no_coarse_layer4
         self.model = opt.model
         self.device = device
 

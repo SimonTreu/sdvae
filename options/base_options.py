@@ -9,11 +9,7 @@ class BaseOptions:
     def __init__(self):
         self.parser = argparse.ArgumentParser()
         self.parser.add_argument('--name', type=str, default='vae_08_30')
-        self.parser.add_argument('--dataroot', type=str, default="data/wind",
-                                 help="path to images (should have subfolders trainA, trainB, valA, valB, etc)")
         self.parser.add_argument('--phase', type=str, default="train", help="train, val, test, etc")
-        self.parser.add_argument('--fine_size', type=int, default=32,
-                                 help="size (in number of high resolution pixels)")
         self.parser.add_argument('--batch_size', type=int, default=124, help='input batch size')
         self.parser.add_argument('--n_threads', type=int, default=4, help='# threads for loading data')
         self.parser.add_argument('--nz', type=int, default=2, help='size of bottleneck')
@@ -27,7 +23,6 @@ class BaseOptions:
                                  help='number of iterations until the next plotting of training results')
         self.parser.add_argument('--eval_val_loss', type=int, default=100,
                                  help='number of iterations until validation loss is calculated')
-        self.parser.add_argument('--lr', type=float, default=1e-3, help='learning rate for optimizer')
         self.parser.add_argument('--save_interval', type=int, default=1, help='every _ epoch the model is saved')
         self.parser.add_argument('--save_latest_interval', type=int, default=100, help='every _ iteration the model is saved')
         self.parser.add_argument('--nf_encoder', type=int, default=16,
@@ -38,17 +33,8 @@ class BaseOptions:
                                  help="if >= 0 load a pre-trained model at the defined epoch, "
                                       "if -1 and training start a new model"
                                       "if -1 and val/test load latest model")
-        self.parser.add_argument('--scale_factor', type=int, default=8,
-                                 help="the scale factor defines by which factor the spacial resolution is increased")
-        self.parser.add_argument('--n_samples', type=int, default=3,
-                                         help="number of downscaled samples created for each cell in test")
-        self.parser.add_argument('--results_dir', type=str, default='./results/', help='saves results here.')
         self.parser.add_argument('--no_orog', action='store_true', help="if specified, don't use topography")
         self.parser.add_argument('--no_dropout', action='store_true', help="if specified, don't use dropout")
-        self.parser.add_argument('--no_coarse_layer3', action='store_true', help="if specified, don't add the coarse "
-                                                                                 "resolution predictands at layer 3")
-        self.parser.add_argument('--no_coarse_layer4', action='store_true', help="if specified, don't add the coarse "
-                                                                                 "resolution predictands at layer 4")
         self.parser.add_argument('--n_test', type=int, default=2, help="n test sets in one cell_sized row of lats")
         self.parser.add_argument('--n_val', type=int, default=2, help="n val sets in one cell_sized row of lats")
         self.parser.add_argument('--seed', type=int, default=0, help="seed value for selection of test sets. "
@@ -110,5 +96,12 @@ class BaseOptions:
         # set gpu ids
         if len(opt.gpu_ids) > 0:
             torch.cuda.set_device(opt.gpu_ids[0])
+
+        opt.dataroot = 'data/wind_psl'
+        opt.fine_size= 32
+        opt.lr = 1e-3  # learning rate
+        opt.scale_factor = 8
+        opt.n_samples=3  # number of downscaled samples created for each cell in test
+        opt.results_dir='./results/'
 
         return opt
