@@ -23,19 +23,19 @@ class GammaVae(nn.Module):
         # 64x5x48x48
         self.h_layer1 = self._down_conv(in_channels=1 + self.use_orog + 4,
                                         out_channels=self.nf_encoder,
-                                        kernel_size=3, padding=1, stride=1)
+                                        kernel_size=4, padding=1, stride=2)
         # 64x20x24x24
         self.h_layer2 = self._down_conv(in_channels=self.nf_encoder + self.use_orog + 4,
                                         out_channels=self.nf_encoder * 2,
-                                        kernel_size=3, padding=1, stride=1)
+                                        kernel_size=4, padding=1, stride=2)
         # 64x20x12x12
         self.h_layer3 = self._down_conv(in_channels=self.nf_encoder*2 + self.use_orog + 4,
                                         out_channels=self.nf_encoder * 3,
-                                        kernel_size=3, padding=1, stride=1)
+                                        kernel_size=4, padding=1, stride=2)
         # 64x35x6x6
         self.h_layer4 = self._down_conv(in_channels=3 * self.nf_encoder + self.use_orog + 4
                                         , out_channels=self.nf_encoder * 3,
-                                        kernel_size=3, padding=1, stride=1)
+                                        kernel_size=4, padding=1, stride=2)
         # 64x48x3x3
 
         # mu
@@ -146,14 +146,12 @@ class GammaVae(nn.Module):
             return nn.Sequential(nn.Conv2d(in_channels=in_channels, out_channels=out_channels,
                                            kernel_size=kernel_size, padding=padding, stride=stride),
                                  nn.BatchNorm2d(out_channels),
-                                 nn.ReLU(),
-                                 nn.MaxPool2d(kernel_size=2))
+                                 nn.ReLU())
         else:
             return nn.Sequential(nn.Conv2d(in_channels=in_channels, out_channels=out_channels,
                                            kernel_size=kernel_size, padding=padding, stride=stride),
                                  nn.BatchNorm2d(out_channels),
                                  nn.ReLU(),
-                                 nn.MaxPool2d(kernel_size=2),
                                  nn.Dropout())
 
 
