@@ -70,18 +70,20 @@ class BaseOptions:
                 for k, v in sorted(args.items()):
                     if type(v) == bool:
                         if v:
-                            opt_file.write(str(k))
+                            opt_file.write('--{}\n'.format(str(k)))
                     else:
                         opt_file.write('--%s %s\n' % (str(k), str(v)))
                 opt_file.write('-------------- Val Option ----------------\n')
                 for k, v in sorted(args.items()):
                     if type(v) == bool:
                         if v:
-                            opt_file.write(str(k))
+                            opt_file.write('--{}\n'.format(str(k)))
                     elif k == 'load_epoch':
                         opt_file.write('--{} {}\n'.format(str(k), opt.n_epochs-1))
                     elif k == 'phase':
                         opt_file.write('--{} {}\n'.format(str(k), 'val'))
+                    elif k == 'gpu_ids':
+                        opt_file.write('--{} {}\n'.format(str(k), -1))
                     else:
                         opt_file.write('--%s %s\n' % (str(k), str(v)))
                 opt_file.write('-------------- End ----------------\n')

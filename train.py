@@ -51,6 +51,7 @@ def main():
         # get optimizer
         model.train()
         optimizer = torch.optim.Adam(model.parameters(), lr=opt.lr)
+        # todo try amsgrad=True
         viz = Visualizer(opt, n_images=5,
                          training_size=len(climate_data_loader.dataset), n_batches=len(climate_data_loader))
 
