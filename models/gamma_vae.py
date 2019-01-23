@@ -30,20 +30,20 @@ class GammaVae(nn.Module):
                                         kernel_size=4, padding=1, stride=2)
         # 64x20x12x12
         self.h_layer3 = self._down_conv(in_channels=self.nf_encoder*2 + self.use_orog + 4,
-                                        out_channels=self.nf_encoder * 3,
+                                        out_channels=self.nf_encoder * 4,
                                         kernel_size=4, padding=1, stride=2)
         # 64x35x6x6
-        self.h_layer4 = self._down_conv(in_channels=3 * self.nf_encoder + self.use_orog + 4
-                                        , out_channels=self.nf_encoder * 3,
+        self.h_layer4 = self._down_conv(in_channels=4 * self.nf_encoder + self.use_orog + 4
+                                        , out_channels=self.nf_encoder * 8,
                                         kernel_size=4, padding=1, stride=2)
         # 64x48x3x3
 
         # mu
-        self.mu = nn.Sequential(nn.Linear(in_features=self.nf_encoder * 3 * 9, out_features=self.nz))
+        self.mu = nn.Sequential(nn.Linear(in_features=self.nf_encoder * 8 * 9, out_features=self.nz))
         # 64x10x1x1
 
         # log_var
-        self.log_var = nn.Sequential(nn.Linear(in_features=self.nf_encoder * 3 * 9, out_features=self.nz))
+        self.log_var = nn.Sequential(nn.Linear(in_features=self.nf_encoder * 8 * 9, out_features=self.nz))
         # 64x10x1x1
 
         self.decode = Decoder(opt, device)
