@@ -37,8 +37,8 @@ class Visualizer:
 
     def plot(self, fine_pr, recon_pr, image_name):
         vmin = 0
-        vmax = 6
-        fig, axes = plt.subplots(2, self.n_images, sharex='col', sharey='row')
+        vmax = 10
+        fig, axes = plt.subplots(2, self.n_images, sharex=False, sharey='row')
         rand_idx = np.random.randint(0, self.opt.batch_size, self.n_images)
         for i in range(self.n_images):
             axes[0, i].imshow(fine_pr[rand_idx[i]].view(48, 48).cpu().detach().numpy(), vmin=vmin, vmax=vmax,
