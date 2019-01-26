@@ -67,7 +67,7 @@ class ClimateDataset(Dataset):
         # ++ read data ++ #
         with Nc4Dataset(os.path.join(self.root, "dataset.nc4"), "r", format="NETCDF4") as file:
             pr = torch.tensor(file['pr'][t, boundary_lats, boundary_lons], dtype=torch.float)
-            orog = torch.tensor(file['orog'][boundary_lats, boundary_lats],  dtype=torch.float)
+            orog = torch.tensor(file['orog'][boundary_lats, boundary_lons],  dtype=torch.float)
             uas = torch.tensor(file['uas'][t, boundary_lats, boundary_lons], dtype=torch.float)
             vas = torch.tensor(file['vas'][t, boundary_lats, boundary_lons], dtype=torch.float)
             psl = torch.tensor(file['psl'][t, boundary_lats, boundary_lons], dtype=torch.float)
