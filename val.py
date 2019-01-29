@@ -80,12 +80,43 @@ def main():
                 downscaled_pr.long_name += '_downscaled'
                 downscaled_pr.comment = 'downscaled ' + downscaled_pr.comment
 
-            bilinear_upscaled_pr = output_dataset.createVariable('bilinear_downscaled_pr', output_dataset['pr'].datatype,
+                if opt.model == 'gamma_vae':
+                    # p
+                    p = output_dataset.createVariable('p_{}'.format(k), output_dataset['pr'].datatype,
+                                                      output_dataset['pr'].dimensions)
+                    p.setncatts({k: output_dataset['pr'].getncattr(k) for k in output_dataset['pr'].ncattrs()})
+                    p.standard_name += '_p'
+                    p.long_name += '_p'
+                    p.comment = 'p ' + p.comment
+                    # alpha
+                    alpha = output_dataset.createVariable('alpha_{}'.format(k), output_dataset['pr'].datatype,
+                                                          output_dataset['pr'].dimensions)
+                    alpha.setncatts({k: output_dataset['pr'].getncattr(k) for k in output_dataset['pr'].ncattrs()})
+                    alpha.standard_name += '_alpha'
+                    alpha.long_name += '_alpha'
+                    alpha.comment = 'alpha ' + alpha.comment
+                    # beta
+                    beta = output_dataset.createVariable('beta_{}'.format(k), output_dataset['pr'].datatype,
+                                                         output_dataset['pr'].dimensions)
+                    beta.setncatts({k: output_dataset['pr'].getncattr(k) for k in output_dataset['pr'].ncattrs()})
+                    beta.standard_name += '_beta'
+                    beta.long_name += '_beta'
+                    beta.comment = 'beta ' + beta.comment
+                    # mean_downscaled_pr_{}
+                    mean_downscaled_pr = output_dataset.createVariable('mean_downscaled_pr_{}'.format(k), output_dataset['pr'].datatype,
+                                                         output_dataset['pr'].dimensions)
+                    mean_downscaled_pr.setncatts({k: output_dataset['pr'].getncattr(k) for k in output_dataset['pr'].ncattrs()})
+                    mean_downscaled_pr.standard_name += '_mean_downscaled_pr'
+                    mean_downscaled_pr.long_name += '_mean_downscaled_pr'
+                    mean_downscaled_pr.comment = 'mean_downscaled_pr ' + mean_downscaled_pr.comment
+
+            bilinear_downscaled_pr = output_dataset.createVariable('bilinear_downscaled_pr', output_dataset['pr'].datatype,
                                                               output_dataset['pr'].dimensions)
-            bilinear_upscaled_pr.setncatts({k: output_dataset['pr'].getncattr(k) for k in output_dataset['pr'].ncattrs()})
-            bilinear_upscaled_pr.standard_name += '_bilinear_downscaled'
-            bilinear_upscaled_pr.long_name += '_bilinear_downscaled'
-            bilinear_upscaled_pr.comment = 'bilinear_downscaled ' + bilinear_upscaled_pr.comment
+            bilinear_downscaled_pr.setncatts({k: output_dataset['pr'].getncattr(k) for k in output_dataset['pr'].ncattrs()})
+            bilinear_downscaled_pr.standard_name += '_bilinear_downscaled'
+            bilinear_downscaled_pr.long_name += '_bilinear_downscaled'
+            bilinear_downscaled_pr.comment = 'bilinear_downscaled ' + bilinear_downscaled_pr.comment
+
             # set variable values
             output_dataset['lat'][:] = input_dataset['lat'][large_cell_lats]
             output_dataset['lon'][:] = input_dataset['lon'][large_cell_lons]
@@ -132,8 +163,16 @@ def main():
                         output_dataset['downscaled_pr_{}'.format(k)][t, :, :] = recon_pr
                     elif opt.model == "gamma_vae":
                         output_dataset['downscaled_pr_{}'.format(k)][t, :, :] = \
-                            torch.nn.Threshold(0.035807043601739474,0)(recon_pr['p']*recon_pr['alpha']*recon_pr['beta'])
-                        #todo don't hardcode threshold  # Expected value of the mixed gamma distribution
+                            (torch.distributions.bernoulli.Bernoulli(recon_pr['p']).sample() *
+                             torch.distributions.gamma.Gamma(recon_pr['alpha'],1/recon_pr['beta']).sample())[0, 0,:,:]
+
+                        output_dataset['mean_downscaled_pr_{}'.format(k)][t,:,:] = \
+                        torch.nn.Threshold(0.035807043601739474, 0)(recon_pr['p'] * recon_pr['alpha'] * recon_pr['beta'])
+
+                        output_dataset['p_{}'.format(k)][t,:,:] = recon_pr['p']
+                        output_dataset['alpha_{}'.format(k)][t,:,:] = recon_pr['alpha']
+                        output_dataset['beta_{}'.format(k)][ t,:,:] = recon_pr['beta']
+                        #todo don't hardcode threshold
                     else:
                         raise ValueError("model {} is not implemented".format(opt.model))
 
