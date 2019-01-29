@@ -5,6 +5,7 @@ import random
 import time
 from utils.upscale import Upscale
 from netCDF4 import Dataset as Nc4Dataset
+from datetime import datetime
 
 
 class ClimateDataset(Dataset):
@@ -19,20 +20,25 @@ class ClimateDataset(Dataset):
         self.cell_size = opt.fine_size + self.scale_factor
         with Nc4Dataset(os.path.join(self.root, "dataset.nc4"), "r", format="NETCDF4") as file:
             check_dimensions(file, self.cell_size, self.scale_factor)
-            times = file['time'].size
             cols = file['lon'].size//self.cell_size
             self.rows = file['lat'].size//self.cell_size
-            if phase == 'train':
-                self.length = self.rows*(cols-self.n_test-self.n_val)*times
-            elif phase == 'val':
-                self.length = self.rows*self.n_val*times
-            elif phase == 'test':
-                self.length = self.rows * self.n_test * times
+
         self.upscaler = Upscale(size=self.fine_size+2*self.scale_factor, scale_factor=self.scale_factor)
 
         # remove 4 40 boxes to create a training set for each block of 40 rows
         self.lat_lon_list = create_lat_lon_indices(self.rows, cols, self.n_test, self.n_val,
                                                    seed=opt.seed, phase=phase)
+        # remove 3 years for test and 3 years for val
+        self.time_list = create_time_list(seed=opt.seed, phase=phase)
+
+        t = len(self.time_list)
+        if phase == 'train':
+            self.length = self.rows * (cols - self.n_test - self.n_val) * t
+        elif phase == 'val':
+            self.length = self.rows * self.n_val * t
+        elif phase == 'test':
+            self.length = self.rows * self.n_test * t
+        pass
 
     def __len__(self):
         return self.length
@@ -44,7 +50,7 @@ class ClimateDataset(Dataset):
         s_lat = len(self.lat_lon_list)
         s_lon = len(self.lat_lon_list[0])
 
-        t = index // (s_lat * s_lon)
+        t_idx = index // (s_lat * s_lon)
         lat = index % (s_lat * s_lon) // s_lon
         lon = index % s_lon
         # --------------------------------------------------------------------------------------------------------------
@@ -63,6 +69,7 @@ class ClimateDataset(Dataset):
         # longitudes might cross the prime meridian
         boundary_lons = [i % 720
                          for i in range(anchor_lon-self.scale_factor, anchor_lon+self.fine_size+self.scale_factor)]
+        t=self.time_list[t_idx]
         # --------------------------------------------------------------------------------------------------------------
         # ++ read data ++ #
         with Nc4Dataset(os.path.join(self.root, "dataset.nc4"), "r", format="NETCDF4") as file:
@@ -115,5 +122,41 @@ def create_lat_lon_indices(rows, cols, n_test, n_val, seed, phase):
         return test_indices
     elif phase == 'val':
         return val_indices
+    else:
+        raise ValueError("{} is not a valid argument for phase".format(phase))
+
+
+def time_idx(date):
+    first = datetime(year=1979, month=1 ,day=1)
+    return (date-first).days
+
+
+def year_idxs(year):
+    start = datetime(year=year, month=1, day=1)
+    end = datetime(year=year, month=12, day=31)
+    return [i for i in range(time_idx(start), time_idx(end)+1)]
+
+
+def years_idxs(years):
+    y_idxs = []
+    for year in years:
+        y_idxs += year_idxs(year)
+    return y_idxs
+
+
+def create_time_list(seed, phase):
+    rand = random.Random()
+    rand.seed(seed)
+    years=[y for y in range(1979,2014)]
+    val_test_years = rand.sample(years, 6)
+    val_years=val_test_years[:3]
+    test_years=val_test_years[3:]
+    train_years=[y for y in years if not y in val_test_years]
+    if phase == 'train':
+        return years_idxs(train_years)
+    elif phase == 'test':
+        return years_idxs(sorted(test_years))
+    elif phase == 'val':
+        return years_idxs(sorted(val_years))
     else:
         raise ValueError("{} is not a valid argument for phase".format(phase))
