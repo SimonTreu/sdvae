@@ -116,19 +116,21 @@ def main():
 
     for idx_lat in range(3):
         for idx_lon in range(18):
-            large_cell_lats = [i for i in range(idx_lat*40,(idx_lat+1)*40+8)]
-            lats = [i for i in range(idx_lat*40 + 4,(idx_lat+1)*40+4)]
-            # longitudes might cross the prime meridian
-            large_cell_lons = [i % 720 for i in range(idx_lon*40,(idx_lon+1)*40 + 8)]
-            lons = [i % 720 for i in range(idx_lon*40 +4,(idx_lon+1)*40 + 4)]
 
-            pr_tensor = torch.tensor(output_dataset['pr'][:, large_cell_lats, large_cell_lons],
+            # lat with index 0 is 34 N.
+            large_cell_lats = [i for i in range(idx_lat*40+ 4,(idx_lat+1)*40+12)]
+            lats = [i for i in range(idx_lat*40, (idx_lat+1)*40)]
+            # longitudes might cross the prime meridian
+            large_cell_lons = [i % 720 for i in range(idx_lon*40 - 4,(idx_lon+1)*40 + 4)]
+            lons = [i % 720 for i in range(idx_lon*40,(idx_lon+1)*40)]
+
+            pr_tensor = torch.tensor(input_dataset['pr'][climate_data.time_list, large_cell_lats, large_cell_lons],
                                      dtype=torch.float32, device=device).unsqueeze(1)
-            orog_tensor = torch.tensor(output_dataset['orog'][large_cell_lats,large_cell_lons],
+            orog_tensor = torch.tensor(input_dataset['orog'][large_cell_lats,large_cell_lons],
                                        dtype=torch.float32, device=device).expand(len(climate_data.time_list),1,48,48)
-            uas_tensor = torch.tensor(output_dataset['uas'][:, large_cell_lats, large_cell_lons], dtype=torch.float32, device=device).unsqueeze(1)
-            vas_tensor = torch.tensor(output_dataset['vas'][:, large_cell_lats, large_cell_lons], dtype=torch.float32, device=device).unsqueeze(1)
-            psl_tensor = torch.tensor(output_dataset['psl'][:, large_cell_lats, large_cell_lons], dtype=torch.float32, device=device).unsqueeze(1)
+            uas_tensor = torch.tensor(input_dataset['uas'][climate_data.time_list, large_cell_lats, large_cell_lons], dtype=torch.float32, device=device).unsqueeze(1)
+            vas_tensor = torch.tensor(input_dataset['vas'][climate_data.time_list, large_cell_lats, large_cell_lons], dtype=torch.float32, device=device).unsqueeze(1)
+            psl_tensor = torch.tensor(input_dataset['psl'][climate_data.time_list, large_cell_lats, large_cell_lons], dtype=torch.float32, device=device).unsqueeze(1)
 
             coarse_pr = upscaler.upscale(pr_tensor)
             coarse_uas = upscaler.upscale(uas_tensor)
@@ -162,6 +164,7 @@ def main():
                                                        mode='bilinear',
                                                        align_corners=True)
             output_dataset['bilinear_downscaled_pr'][:, lats, lons] = bilinear_pr[:, 0, 4:-4, 4:-4]
+            print('Progress = {:>5.1f} %'.format((idx_lat + 1)*(idx_lon + 1) * 100 / (3*18)))
     output_dataset.close()
     input_dataset.close()
 
