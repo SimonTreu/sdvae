@@ -164,7 +164,7 @@ def main():
                                                        mode='bilinear',
                                                        align_corners=True)
             output_dataset['bilinear_downscaled_pr'][:, lats, lons] = bilinear_pr[:, 0, 4:-4, 4:-4]
-            print('Progress = {:>5.1f} %'.format((idx_lat + 1)*(idx_lon + 1) * 100 / (3*18)))
+            print('Progress = {:>5.1f} %'.format((idx_lat*3 + idx_lon + 1) * 100 / (3*18)))
     output_dataset.close()
     input_dataset.close()
 
