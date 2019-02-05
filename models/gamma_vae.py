@@ -191,7 +191,7 @@ class Decoder(nn.Module):
                                     kernel_size=4,stride=2, padding=1)
         # 64x36x48x48
         # all padding
-        self.layer6 = self._conv(in_channels=nf_decoder + self.use_orog + 4,
+        self.layer6 = self._conv(in_channels=nf_decoder + self.use_orog,
                                  out_channels=nf_decoder * 2,
                                  kernel_size=3, stride=1, padding=1)
         # 64x32x48x48
@@ -257,9 +257,9 @@ class Decoder(nn.Module):
         if self.use_orog:
             layer6_input.append(orog)
 
-        upsample48 = torch.nn.Upsample(scale_factor=self.scale_factor, mode='nearest')
-        layer6_input += [upsample48(coarse_pr), upsample48(coarse_uas),
-                         upsample48(coarse_vas), upsample48(coarse_psl)]
+        #upsample48 = torch.nn.Upsample(scale_factor=self.scale_factor, mode='nearest')
+        #layer6_input += [upsample48(coarse_pr), upsample48(coarse_uas),
+        #                 upsample48(coarse_vas), upsample48(coarse_psl)]
         hidden_state6 = self.layer6(torch.cat(layer6_input, 1))
         # output layer
         if self.model == 'gamma_vae':
