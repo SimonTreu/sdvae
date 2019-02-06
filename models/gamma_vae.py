@@ -170,28 +170,28 @@ class Decoder(nn.Module):
 
         # dimensions for batch_size=64, nf_decoder=16, fine_size=32, nz=10
         # 64x10x1x1
-        self.layer1 = self._up_conv(in_channels=self.nz,
+        self.layer1 = self._conv(in_channels=self.nz,
                                     out_channels=nf_decoder * 4,
-                                    kernel_size=3, stride=1, padding=0)
+                                    kernel_size=3, stride=1, padding=1)
         # 64x19x3x3
-        self.layer2 = self._up_conv(in_channels=nf_decoder * 4,
+        self.layer2 = self._conv(in_channels=nf_decoder * 4 + self.use_orog + 4,
                                     out_channels=nf_decoder * 3,
-                                    kernel_size=4, stride=2, padding=1)
+                                    kernel_size=3, stride=1, padding=1)
         # 64x19x6x6
-        self.layer3 = self._up_conv(in_channels=nf_decoder * 3 + self.use_orog + 4,
+        self.layer3 = self._conv(in_channels=nf_decoder * 3 + self.use_orog,
                                     out_channels=nf_decoder * 2,
-                                    kernel_size=4, stride=2, padding=1)
+                                    kernel_size=3, stride=1, padding=1)
         # 64x36x12x12
-        self.layer4 = self._up_conv(in_channels=nf_decoder * 2 + self.use_orog,
+        self.layer4 = self._conv(in_channels=nf_decoder * 2 + self.use_orog,
                                     out_channels=nf_decoder,
-                                    kernel_size=4, stride=2, padding=1)
+                                    kernel_size=3, stride=1, padding=1)
         # 64x36x24x24
-        self.layer5 = self._up_conv(in_channels=nf_decoder + self.use_orog,
+        self.layer5 = self._conv(in_channels=nf_decoder + self.use_orog,
                                     out_channels=nf_decoder,
-                                    kernel_size=4,stride=2, padding=1)
+                                    kernel_size=3,stride=1, padding=1)
         # 64x36x48x48
         # all padding
-        self.layer6 = self._conv(in_channels=nf_decoder + self.use_orog,
+        self.layer6 = self._conv(in_channels=nf_decoder,
                                  out_channels=nf_decoder * 2,
                                  kernel_size=3, stride=1, padding=1)
         # 64x32x48x48
@@ -217,50 +217,40 @@ class Decoder(nn.Module):
     def forward(self, z, coarse_pr,
                 coarse_uas, coarse_vas, orog, coarse_psl):
         # layer 1
-        hidden_state1 = self.layer1(z)
+        hidden_state1 = self.layer1(torch.nn.Upsample(scale_factor=3, mode='nearest')(z))
 
-        # layer 2
-        hidden_state2 = self.layer2(hidden_state1)
-
-        # layer 3
-        layer3_input = [hidden_state2]
+        # layer 2 6x6
+        layer2_input = [torch.nn.Upsample(scale_factor=2, mode='nearest')(hidden_state1)]
         if self.use_orog:
             upscale6 = Upscale(size=48, scale_factor=8, device=self.device)
-            layer3_input.append(upscale6.upscale(orog))
-        layer3_input += [coarse_pr, coarse_uas, coarse_vas, coarse_psl]
-        hidden_state3 = self.layer3(torch.cat(layer3_input, 1))
+            layer2_input.append(upscale6.upscale(orog))
+        layer2_input += [coarse_pr, coarse_uas, coarse_vas, coarse_psl]
+        hidden_state2 = self.layer2(torch.cat(layer2_input, 1))
 
-        # layer 4
-        layer4_input = [hidden_state3]
+        # layer 3 12x12
+        layer3_input = [torch.nn.Upsample(scale_factor=2, mode='nearest')(hidden_state2)]
         if self.use_orog:
             upscale12 = Upscale(size=48, scale_factor=4, device=self.device)
-            layer4_input.append(upscale12.upscale(orog))
+            layer3_input.append(upscale12.upscale(orog))
 
-        #upsample12 = torch.nn.Upsample(scale_factor=2, mode='nearest')
-        #layer4_input += [upsample12(coarse_pr), upsample12(coarse_uas),
-        #                 upsample12(coarse_vas), upsample12(coarse_psl)]
-        hidden_state4 = self.layer4(torch.cat(layer4_input,1))
+        hidden_state3 = self.layer3(torch.cat(layer3_input, 1))
 
-        # layer 5
-        layer5_input = [hidden_state4]
+        # layer 4 24x24
+        layer4_input = [torch.nn.Upsample(scale_factor=2, mode='nearest')(hidden_state3)]
         if self.use_orog:
             upscale24 = Upscale(size=48, scale_factor=2, device=self.device)
-            layer5_input.append(upscale24.upscale(orog))
+            layer4_input.append(upscale24.upscale(orog))
+        hidden_state4 = self.layer4(torch.cat(layer4_input,1))
 
-        #upsample24 = torch.nn.Upsample(scale_factor=4, mode='nearest')
-        #layer5_input += [upsample24(coarse_pr), upsample24(coarse_uas),
-        #                 upsample24(coarse_vas), upsample24(coarse_psl)]
+        # layer 5 48x48
+        layer5_input = [torch.nn.Upsample(scale_factor=2, mode='nearest')(hidden_state4)]
+        if self.use_orog:
+            layer5_input.append(orog)
         hidden_state5 = self.layer5(torch.cat(layer5_input,1))
 
         # layer 6
-        layer6_input = [hidden_state5]
-        if self.use_orog:
-            layer6_input.append(orog)
+        hidden_state6 = self.layer6(hidden_state5)
 
-        #upsample48 = torch.nn.Upsample(scale_factor=self.scale_factor, mode='nearest')
-        #layer6_input += [upsample48(coarse_pr), upsample48(coarse_uas),
-        #                 upsample48(coarse_vas), upsample48(coarse_psl)]
-        hidden_state6 = self.layer6(torch.cat(layer6_input, 1))
         # output layer
         if self.model == 'gamma_vae':
             p = self.p_layer(hidden_state6)
