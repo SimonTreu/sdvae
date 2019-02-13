@@ -93,8 +93,8 @@ class GammaVae(nn.Module):
             mu = self.mu(h_layer4.view(h_layer4.shape[0], -1)).unsqueeze(-1).unsqueeze(-1)
             log_var = self.log_var(h_layer4.view(h_layer4.shape[0], -1)).unsqueeze(-1).unsqueeze(-1)
         else:
-            mu = torch.zeros(fine_pr.shape[0], self.nz, 1, 1)
-            log_var = torch.zeros(fine_pr.shape[0], self.nz, 1, 1)
+            mu = torch.zeros(fine_pr.shape[0], self.nz, 1, 1, dtype=torch.float, device=self.device)
+            log_var = torch.zeros(fine_pr.shape[0], self.nz, 1, 1, dtype=torch.float, device=self.device)
         # reparameterization
         z = self._reparameterize(mu, log_var)
 
