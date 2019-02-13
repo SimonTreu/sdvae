@@ -42,6 +42,7 @@ class BaseOptions:
                                                                      "different test sets are created")
         self.parser.add_argument('--model', type=str, default='mse_vae', help="which model to use. Available options are"
                                                                               " 'mse_vae' and 'gamma_vae")
+        self.parser.add_argument('--regression', action='store_true', help="if specified always use mu= 0,logvar = 0 as output of encoder")
 
     def parse(self, args=None):
         if args:

@@ -17,6 +17,7 @@ class GammaVae(nn.Module):
         self.scale_factor = opt.scale_factor
         self.fine_size = opt.fine_size
         self.device = device
+        self.regression = opt.regression
 
 
         # dimensions for batch_size=64, nf_encoder=16, fine_size=32, nz=10, orog=True
@@ -49,48 +50,51 @@ class GammaVae(nn.Module):
         self.decode = Decoder(opt, device)
 
     def forward(self, fine_pr, coarse_pr, orog, coarse_uas, coarse_vas, coarse_psl):
-        # layer 1
-        input_layer_input = [fine_pr]
-        if self.use_orog:
-            input_layer_input.append(orog)
+        if not self.regression:
+            # layer 1
+            input_layer_input = [fine_pr]
+            if self.use_orog:
+                input_layer_input.append(orog)
 
-        upsample48 = torch.nn.Upsample(scale_factor=self.scale_factor, mode='nearest')
-        input_layer_input += [upsample48(coarse_pr), upsample48(coarse_uas),
-                              upsample48(coarse_vas), upsample48(coarse_psl)]
-        h_layer1 = self.h_layer1(torch.cat(input_layer_input, 1))
+            upsample48 = torch.nn.Upsample(scale_factor=self.scale_factor, mode='nearest')
+            input_layer_input += [upsample48(coarse_pr), upsample48(coarse_uas),
+                                  upsample48(coarse_vas), upsample48(coarse_psl)]
+            h_layer1 = self.h_layer1(torch.cat(input_layer_input, 1))
 
-        # layer 2
-        layer2_input = [h_layer1]
-        if self.use_orog:
-            upscale24 = Upscale(size=48, scale_factor=2, device=self.device)
-            layer2_input.append(upscale24.upscale(orog))
-        upsample24 = torch.nn.Upsample(scale_factor=4, mode='nearest')
-        layer2_input += [upsample24(coarse_pr), upsample24(coarse_uas),
-                         upsample24(coarse_vas), upsample24(coarse_psl)]
-        h_layer2 = self.h_layer2(torch.cat(layer2_input, 1))
+            # layer 2
+            layer2_input = [h_layer1]
+            if self.use_orog:
+                upscale24 = Upscale(size=48, scale_factor=2, device=self.device)
+                layer2_input.append(upscale24.upscale(orog))
+            upsample24 = torch.nn.Upsample(scale_factor=4, mode='nearest')
+            layer2_input += [upsample24(coarse_pr), upsample24(coarse_uas),
+                             upsample24(coarse_vas), upsample24(coarse_psl)]
+            h_layer2 = self.h_layer2(torch.cat(layer2_input, 1))
 
-        # layer 3
-        layer3_input = [h_layer2]
-        if self.use_orog:
-            upscale12 = Upscale(size=48, scale_factor=4, device=self.device)
-            layer3_input.append(upscale12.upscale(orog))
-        upsample12 = torch.nn.Upsample(scale_factor=2, mode='nearest')
-        layer3_input += [upsample12(coarse_pr), upsample12(coarse_uas),
-                         upsample12(coarse_vas), upsample12(coarse_psl)]
-        h_layer3 = self.h_layer3(torch.cat(layer3_input, 1))
+            # layer 3
+            layer3_input = [h_layer2]
+            if self.use_orog:
+                upscale12 = Upscale(size=48, scale_factor=4, device=self.device)
+                layer3_input.append(upscale12.upscale(orog))
+            upsample12 = torch.nn.Upsample(scale_factor=2, mode='nearest')
+            layer3_input += [upsample12(coarse_pr), upsample12(coarse_uas),
+                             upsample12(coarse_vas), upsample12(coarse_psl)]
+            h_layer3 = self.h_layer3(torch.cat(layer3_input, 1))
 
-        # layer 4
-        layer4_input = [h_layer3]
-        if self.use_orog:
-            upscale6 = Upscale(size=48, scale_factor=8, device=self.device)
-            layer4_input.append(upscale6.upscale(orog))
-        layer4_input += [coarse_pr, coarse_uas, coarse_vas, coarse_psl]
-        h_layer4 = self.h_layer4(torch.cat(layer4_input, 1))
+            # layer 4
+            layer4_input = [h_layer3]
+            if self.use_orog:
+                upscale6 = Upscale(size=48, scale_factor=8, device=self.device)
+                layer4_input.append(upscale6.upscale(orog))
+            layer4_input += [coarse_pr, coarse_uas, coarse_vas, coarse_psl]
+            h_layer4 = self.h_layer4(torch.cat(layer4_input, 1))
 
-        # output layer
-        mu = self.mu(h_layer4.view(h_layer4.shape[0], -1)).unsqueeze(-1).unsqueeze(-1)
-        log_var = self.log_var(h_layer4.view(h_layer4.shape[0], -1)).unsqueeze(-1).unsqueeze(-1)
-
+            # output layer
+            mu = self.mu(h_layer4.view(h_layer4.shape[0], -1)).unsqueeze(-1).unsqueeze(-1)
+            log_var = self.log_var(h_layer4.view(h_layer4.shape[0], -1)).unsqueeze(-1).unsqueeze(-1)
+        else:
+            mu = torch.zeros(fine_pr.shape[0], self.nz, 1, 1)
+            log_var = torch.zeros(fine_pr.shape[0], self.nz, 1, 1)
         # reparameterization
         z = self._reparameterize(mu, log_var)
 
