@@ -1,6 +1,6 @@
 from datasets.climate_dataset import ClimateDataset
 from torch.utils.data import DataLoader
-from models.gamma_vae import GammaVae
+from models.sdvae import SDVAE
 from utils.visualizer import Visualizer
 
 import torch
@@ -38,7 +38,7 @@ def main():
     val_data_loader = DataLoader(val_data, batch_size=opt.batch_size,shuffle=True,num_workers=int(opt.n_threads))
 
     # load the model
-    model = GammaVae(opt=opt, device=device).to(device)
+    model = SDVAE(opt=opt, device=device).to(device)
 
     initial_epoch = 0
     if opt.load_epoch >= 0:

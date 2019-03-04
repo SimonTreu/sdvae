@@ -6,7 +6,7 @@ from netCDF4 import Dataset
 from options.base_options import BaseOptions
 from datasets.climate_dataset import ClimateDataset
 from utils.upscale import Upscale
-from models.gamma_vae import GammaVae
+from models.sdvae import SDVAE
 
 
 def main():
@@ -28,7 +28,7 @@ def main():
     cell = 40
 
     # load the model
-    model = GammaVae(opt=opt, device=device).to(device)
+    model = SDVAE(opt=opt, device=device).to(device)
     model.load_state_dict(torch.load(load_dir, map_location='cpu'))
     model.eval()
 

@@ -3,9 +3,9 @@ import torch
 from utils.upscale import Upscale
 
 
-class GammaVae(nn.Module):
+class SDVAE(nn.Module):
     def __init__(self, opt, device):
-        super(GammaVae, self).__init__()
+        super(SDVAE, self).__init__()
         # variables
         self.nz = opt.nz
         self.input_size = opt.fine_size ** 2
